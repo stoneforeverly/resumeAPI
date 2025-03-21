@@ -40,7 +40,13 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Configure OpenAI
 openai_client = None
 try:
-    openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # 使用兼容新版本的方式初始化OpenAI客户端
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        openai_client = OpenAI(api_key=api_key)
+        print("OpenAI client initialized successfully")
+    else:
+        print("Warning: OPENAI_API_KEY not found in environment variables")
 except Exception as e:
     print(f"Error initializing OpenAI client: {e}")
 

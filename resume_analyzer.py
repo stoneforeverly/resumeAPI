@@ -22,9 +22,11 @@ if USE_GEMINI:
 openai_client = None
 if USE_OPENAI:
     try:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY) 
+        # 使用兼容新版本的方式初始化OpenAI客户端
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("Resume analyzer: OpenAI client initialized successfully") 
     except Exception as e:
-        print(f"Error initializing OpenAI client: {e}")
+        print(f"Error initializing OpenAI client in resume_analyzer: {e}")
         USE_OPENAI = False
 
 def analyze_resume(resume_text):
