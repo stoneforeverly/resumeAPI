@@ -17,105 +17,207 @@ if "<db_password>" in MONGO_URI:
         MONGO_URI = MONGO_URI.replace("<db_password>", db_password)
 
 # Flag to track MongoDB availability
-mongodb_available = True
+mongodb_available = False
 
 try:
     # Initialize MongoDB client
     client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
     # Ping the server to make sure it's available
     client.admin.command('ping')
+    print("MongoDB connection successful")
     db = client.resume_db
     
     # Collections
     resumes = db.resumes
     analyses = db.analyses
-    
-    print("MongoDB connection successful")
+    mongodb_available = True
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
-    mongodb_available = False
+    # Create fallback data structures
+    class MemoryCollection:
+        def __init__(self):
+            self.data = {}
+            self.counter = 1
+        
+        def insert_one(self, document):
+            # Generate a unique ID
+            if '_id' not in document:
+                document['_id'] = self.counter
+                self.counter += 1
+            self.data[document['_id']] = document
+            return type('obj', (object,), {'inserted_id': document['_id']})
+        
+        def find_one(self, query):
+            for doc_id, doc in self.data.items():
+                # Simple matching for _id queries
+                if '_id' in query and doc_id == query['_id']:
+                    return doc
+            return None
+        
+        def find(self, query=None):
+            # Return all documents for now, as a simple implementation
+            if query is None:
+                return list(self.data.values())
+            
+            results = []
+            for doc in self.data.values():
+                match = True
+                for key, value in query.items():
+                    if key not in doc or doc[key] != value:
+                        match = False
+                        break
+                if match:
+                    results.append(doc)
+            return results
+            
+        def update_one(self, query, update):
+            for doc_id, doc in self.data.items():
+                # Simple matching for _id queries
+                if '_id' in query and doc_id == query['_id']:
+                    # Handle $set operation
+                    if '$set' in update:
+                        for key, value in update['$set'].items():
+                            doc[key] = value
+                    return
+    
+    # Create memory-based collections
+    resumes = MemoryCollection()
+    analyses = MemoryCollection()
+    print("Using in-memory storage as fallback")
 
 def save_resume_metadata(filename, filepath, user_id=None):
-    """Save only resume metadata (without content)"""
-    if not mongodb_available:
-        # Generate a fake ObjectId if MongoDB is not available
-        return ObjectId()
-    
-    resume_doc = {
-        "filename": filename,
-        "filepath": filepath,
-        "user_id": user_id,
-        "upload_date": datetime.datetime.utcnow(),
-        "status": "uploaded"  # Track processing status
-    }
-    return resumes.insert_one(resume_doc).inserted_id
+    """Save resume metadata to database"""
+    try:
+        timestamp = datetime.datetime.now()
+        
+        resume_data = {
+            "filename": filename,
+            "filepath": filepath,
+            "upload_date": timestamp,
+            "status": "uploaded",
+        }
+        
+        if user_id:
+            resume_data["user_id"] = user_id
+        
+        result = resumes.insert_one(resume_data)
+        return result.inserted_id
+    except Exception as e:
+        print(f"Error saving resume metadata: {e}")
+        return None
 
 def update_resume_content(resume_id, content):
-    """Update resume with parsed content"""
-    if not mongodb_available:
-        return None
-    
-    return resumes.update_one(
-        {"_id": resume_id},
-        {
-            "$set": {
+    """Update resume with extracted content"""
+    try:
+        if mongodb_available and isinstance(resume_id, str):
+            try:
+                resume_id = ObjectId(resume_id)
+            except:
+                pass
+                
+        resumes.update_one(
+            {"_id": resume_id},
+            {"$set": {
                 "content": content,
-                "status": "parsed",
-                "parsed_date": datetime.datetime.utcnow()
-            }
-        }
-    )
+                "status": "parsed"
+            }}
+        )
+        return True
+    except Exception as e:
+        print(f"Error updating resume content: {e}")
+        return False
 
-def save_resume(filename, content, user_id=None):
-    """Save uploaded resume to database"""
-    if not mongodb_available:
-        # Generate a fake ObjectId if MongoDB is not available
-        return ObjectId()
-    
-    resume_doc = {
-        "filename": filename,
-        "content": content,
-        "user_id": user_id,
-        "upload_date": datetime.datetime.utcnow(),
-        "status": "parsed"  # Mark as already parsed
-    }
-    return resumes.insert_one(resume_doc).inserted_id
+def save_resume(filename, filepath, user_id=None):
+    """Create a new resume entry (legacy function)"""
+    try:
+        timestamp = datetime.datetime.now()
+        
+        resume_data = {
+            "filename": filename,
+            "filepath": filepath,
+            "upload_date": timestamp,
+            "status": "new",
+        }
+        
+        if user_id:
+            resume_data["user_id"] = user_id
+        
+        result = resumes.insert_one(resume_data)
+        return result.inserted_id
+    except Exception as e:
+        print(f"Error saving resume: {e}")
+        return None
 
 def save_analysis(resume_id, analysis_data):
-    """Save resume analysis to database"""
-    if not mongodb_available:
-        # Generate a fake ObjectId if MongoDB is not available
-        return ObjectId()
-    
-    # Update the resume document to indicate it has been analyzed
-    resumes.update_one(
-        {"_id": resume_id},
-        {"$set": {"status": "analyzed", "analyzed_date": datetime.datetime.utcnow()}}
-    )
-    
-    analysis_doc = {
-        "resume_id": resume_id,
-        "analysis": analysis_data,
-        "date": datetime.datetime.utcnow(),
-    }
-    return analyses.insert_one(analysis_doc).inserted_id
+    """Save analysis data for a resume"""
+    try:
+        if mongodb_available and isinstance(resume_id, str):
+            try:
+                resume_id = ObjectId(resume_id)
+            except:
+                pass
+                
+        timestamp = datetime.datetime.now()
+        
+        analysis = {
+            "resume_id": resume_id,
+            "analysis": analysis_data,
+            "date": timestamp
+        }
+        
+        result = analyses.insert_one(analysis)
+        return result.inserted_id
+    except Exception as e:
+        print(f"Error saving analysis: {e}")
+        return None
 
 def get_resume(resume_id):
-    """Retrieve resume by ID"""
-    if not mongodb_available:
+    """Get a resume by ID"""
+    try:
+        if mongodb_available:
+            if isinstance(resume_id, str):
+                try:
+                    resume_id = ObjectId(resume_id)
+                except:
+                    pass
+            return resumes.find_one({"_id": resume_id})
+        else:
+            # For in-memory storage, convert ObjectId to int if needed
+            if isinstance(resume_id, ObjectId):
+                resume_id = str(resume_id)
+            return resumes.find_one({"_id": resume_id})
+    except Exception as e:
+        print(f"Error getting resume: {e}")
         return None
-    
-    return resumes.find_one({"_id": resume_id})
 
 def get_analysis(resume_id):
-    """Retrieve analysis by resume ID"""
-    if not mongodb_available:
+    """Get analysis for a specific resume"""
+    try:
+        if mongodb_available:
+            if isinstance(resume_id, str):
+                try:
+                    resume_id = ObjectId(resume_id)
+                except:
+                    pass
+            return analyses.find_one({"resume_id": resume_id})
+        else:
+            # For in-memory storage, convert ObjectId to int if needed
+            if isinstance(resume_id, ObjectId):
+                resume_id = str(resume_id)
+            return analyses.find_one({"resume_id": resume_id})
+    except Exception as e:
+        print(f"Error getting analysis: {e}")
         return None
-    
-    return analyses.find_one({"resume_id": resume_id})
 
 def get_resumes_by_user(user_id):
-    """
-    Get all resumes for a specific user
-    """
-    return resumes.find({"user_id": user_id}) 
+    """Get all resumes for a specific user"""
+    try:
+        if mongodb_available:
+            # Return a cursor for MongoDB
+            return resumes.find({"user_id": user_id})
+        else:
+            # For in-memory storage, return a list
+            return resumes.find({"user_id": user_id})
+    except Exception as e:
+        print(f"Error getting resumes by user: {e}")
+        return [] 
