@@ -4,13 +4,14 @@ This API provides resume uploading, parsing, analysis, and scoring functionality
 
 ## Features
 
-- Resume upload (PDF, DOCX, TXT formats)
+- Resume upload (PDF files only)
 - Resume parsing and content extraction
 - Resume analysis and scoring using LLM
 - Job recommendations based on resume analysis
 - Storage of resumes and analyses in MongoDB
 - Dockerized for easy deployment
 - RESTful API design
+- Interactive API documentation with Swagger UI
 
 ## Setup
 
@@ -57,9 +58,15 @@ python3 app.py
 
 The API will be available at http://localhost:8080
 
+## API Documentation
+
+The API is fully documented using Swagger UI, which provides an interactive interface to explore and test all endpoints.
+
+Access the Swagger documentation at: http://localhost:8080/docs/
+
 ## API Endpoints
 
-The API follows RESTful design principles with consistent response formats.
+The API follows RESTful design principles with consistent response formats and is structured around a multi-step process.
 
 ### Common Response Format
 
@@ -82,14 +89,14 @@ On error:
 }
 ```
 
-### Upload a Resume
+### Step 1: Upload a Resume
 
-**URL**: `/api/v1/resumes`  
+**URL**: `/api/v1/resumes/upload`  
 **Method**: `POST`  
 **Content-Type**: `multipart/form-data`  
 **Form Parameters**:
-- `file`: The resume file (PDF, DOCX, or TXT)
-- `user_id` (optional): User identifier
+- `file`: The resume file (PDF only)
+- `user_id`: User identifier (required)
 
 **Response**:
 ```json
@@ -98,6 +105,40 @@ On error:
   "data": {
     "resume_id": "12345abcde",
     "filename": "resume.pdf",
+    "user_id": "user123",
+    "filepath": "uploads/resume.pdf",
+    "file_type": "pdf"
+  }
+}
+```
+
+### Step 2: Parse a Resume
+
+**URL**: `/api/v1/resumes/<resume_id>/parse`  
+**Method**: `POST`  
+
+**Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "resume_id": "12345abcde",
+    "content": "Extracted resume content..."
+  }
+}
+```
+
+### Step 3: Analyze a Resume
+
+**URL**: `/api/v1/resumes/<resume_id>/analyze`  
+**Method**: `POST`  
+
+**Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "resume_id": "12345abcde",
     "analysis_id": "67890fghij",
     "analysis": {
       "overall_score": 85,
@@ -109,6 +150,32 @@ On error:
         "comments": "..."
       }
     }
+  }
+}
+```
+
+### List Resumes
+
+**URL**: `/api/v1/resumes`  
+**Method**: `GET`  
+**Query Parameters**:
+- `user_id`: User identifier (required)
+
+**Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "resumes": [
+      {
+        "_id": "12345abcde",
+        "filename": "resume.pdf",
+        "upload_date": "2023-06-01T12:00:00.000Z",
+        "status": "parsed",
+        "user_id": "user123"
+      },
+      ...
+    ]
   }
 }
 ```
@@ -161,7 +228,7 @@ On error:
 
 ### Get Job Suggestions
 
-**URL**: `/api/v1/job-suggestions/<resume_id>`  
+**URL**: `/api/v1/resumes/<resume_id>/job-suggestions`  
 **Method**: `GET`  
 
 **Response**:
@@ -205,14 +272,45 @@ On error:
 }
 ```
 
-## Legacy API Endpoints
+## Compatibility API Endpoints
 
-For backward compatibility, the API still supports the old endpoint paths:
+For backward compatibility, the API still supports legacy endpoints:
 
-- `/upload` (POST) → Maps to `/api/v1/resumes`
+### One-step Resume Upload and Analysis
+
+**URL**: `/api/resumes`  
+**Method**: `POST`  
+**Content-Type**: `multipart/form-data`  
+**Form Parameters**:
+- `file`: The resume file (PDF only)
+- `user_id`: User identifier (required)
+
+**Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "resume_id": "12345abcde",
+    "analysis": {
+      "overall_score": 85,
+      "strengths": ["..."],
+      "areas_for_improvement": ["..."],
+      "suggestions": ["..."],
+      "ats_compatibility": {
+        "score": 80,
+        "comments": "..."
+      }
+    }
+  }
+}
+```
+
+Additionally, the following legacy paths are still supported:
+
+- `/upload` (POST) → Maps to compatibility API
 - `/resume/<id>` (GET) → Maps to `/api/v1/resumes/<id>`
 - `/analysis/<id>` (GET) → Maps to `/api/v1/analyses/<id>`
-- `/job-suggestions/<id>` (GET) → Maps to `/api/v1/job-suggestions/<id>`
+- `/job-suggestions/<id>` (GET) → Maps to `/api/v1/resumes/<id>/job-suggestions`
 - `/health` (GET) → Maps to `/api/v1/health`
 
 ## Testing
