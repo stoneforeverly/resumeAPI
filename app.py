@@ -37,6 +37,9 @@ swagger = Swagger(app, config=swagger_config, template=swagger_template)
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+# Check MongoDB availability
+mongodb_available = db.mongodb_available
+
 # Configure OpenAI
 openai_client = None
 try:
@@ -99,8 +102,12 @@ def upload_file():
 def parse_resume_api(resume_id):
     """Parse a previously uploaded resume file"""
     try:
-        # Get the resume metadata
-        resume = db.get_resume(ObjectId(resume_id))
+        # Get the resume metadata - handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            resume = db.get_resume(ObjectId(resume_id))
+        else:
+            resume = db.get_resume(resume_id)
+            
         if not resume:
             return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
         
@@ -114,7 +121,10 @@ def parse_resume_api(resume_id):
         resume_content = resume_parser.parse_resume(filepath)
         
         # Update the resume with parsed content
-        db.update_resume_content(ObjectId(resume_id), resume_content)
+        if mongodb_available:
+            db.update_resume_content(ObjectId(resume_id), resume_content)
+        else:
+            db.update_resume_content(resume_id, resume_content)
         
         return jsonify({
             'status': 'success',
@@ -132,8 +142,12 @@ def parse_resume_api(resume_id):
 def analyze_resume_api(resume_id):
     """Analyze a previously parsed resume"""
     try:
-        # Get the resume
-        resume = db.get_resume(ObjectId(resume_id))
+        # Get the resume - handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            resume = db.get_resume(ObjectId(resume_id))
+        else:
+            resume = db.get_resume(resume_id)
+            
         if not resume:
             return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
         
@@ -144,8 +158,11 @@ def analyze_resume_api(resume_id):
         # Analyze resume
         analysis = resume_analyzer.analyze_resume(resume['content'])
         
-        # Save analysis to database
-        analysis_id = db.save_analysis(ObjectId(resume_id), analysis)
+        # Save analysis to database - handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            analysis_id = db.save_analysis(ObjectId(resume_id), analysis)
+        else:
+            analysis_id = db.save_analysis(resume_id, analysis)
         
         return jsonify({
             'status': 'success',
@@ -197,10 +214,16 @@ def list_resumes():
 def get_resume(resume_id):
     """Get a specific resume by ID"""
     try:
-        resume = db.get_resume(ObjectId(resume_id))
+        # Handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            resume = db.get_resume(ObjectId(resume_id))
+        else:
+            resume = db.get_resume(resume_id)
+            
         if resume:
-            # Convert ObjectId to string for JSON serialization
-            resume['_id'] = str(resume['_id'])
+            # Convert ObjectId to string for JSON serialization if using MongoDB
+            if mongodb_available and '_id' in resume:
+                resume['_id'] = str(resume['_id'])
             return jsonify({
                 'status': 'success',
                 'data': resume
@@ -216,11 +239,19 @@ def get_resume(resume_id):
 def get_analysis(resume_id):
     """Get the analysis for a specific resume"""
     try:
-        analysis = db.get_analysis(ObjectId(resume_id))
+        # Handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            analysis = db.get_analysis(ObjectId(resume_id))
+        else:
+            analysis = db.get_analysis(resume_id)
+            
         if analysis:
-            # Convert ObjectId to string for JSON serialization
-            analysis['_id'] = str(analysis['_id'])
-            analysis['resume_id'] = str(analysis['resume_id'])
+            # Convert ObjectId to string for JSON serialization if using MongoDB
+            if mongodb_available:
+                if '_id' in analysis:
+                    analysis['_id'] = str(analysis['_id'])
+                if 'resume_id' in analysis:
+                    analysis['resume_id'] = str(analysis['resume_id'])
             return jsonify({
                 'status': 'success',
                 'data': analysis
@@ -236,9 +267,13 @@ def get_analysis(resume_id):
 def get_job_suggestions(resume_id):
     """Get job suggestions based on a resume"""
     try:
-        # Get resume and analysis
-        resume = db.get_resume(ObjectId(resume_id))
-        analysis = db.get_analysis(ObjectId(resume_id))
+        # Get resume and analysis - handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            resume = db.get_resume(ObjectId(resume_id))
+            analysis = db.get_analysis(ObjectId(resume_id))
+        else:
+            resume = db.get_resume(resume_id)
+            analysis = db.get_analysis(resume_id)
         
         if not resume or not analysis:
             return jsonify({'status': 'error', 'message': 'Resume or analysis not found'}), 404
@@ -372,13 +407,29 @@ def upload_and_analyze_resume():
         resume_content = resume_parser.parse_resume(filepath)
         
         # Update resume with parsed content
-        db.update_resume_content(resume_id, resume_content)
+        if mongodb_available:
+            # Check if resume_id is already an ObjectId instance
+            if not isinstance(resume_id, ObjectId):
+                resume_id_obj = ObjectId(resume_id)
+            else:
+                resume_id_obj = resume_id
+            db.update_resume_content(resume_id_obj, resume_content)
+        else:
+            db.update_resume_content(resume_id, resume_content)
         
         # Analyze the resume
         analysis = resume_analyzer.analyze_resume(resume_content)
         
         # Save analysis to database
-        analysis_id = db.save_analysis(resume_id, analysis)
+        if mongodb_available:
+            # Check if resume_id is already an ObjectId instance
+            if not isinstance(resume_id, ObjectId):
+                resume_id_obj = ObjectId(resume_id)
+            else:
+                resume_id_obj = resume_id
+            analysis_id = db.save_analysis(resume_id_obj, analysis)
+        else:
+            analysis_id = db.save_analysis(resume_id, analysis)
         
         # Return success with resume ID and analysis
         return jsonify({
@@ -455,26 +506,76 @@ def upload_resume():
 @app.route('/resume/<resume_id>', methods=['GET'])
 def get_resume_legacy(resume_id):
     """Legacy endpoint for getting resume"""
-    response = get_resume(resume_id)
-    if isinstance(response, tuple):
-        return response
-    return response
+    # Handle the case when MongoDB is not available
+    if mongodb_available:
+        return get_resume(resume_id)
+    else:
+        # Manually call the function with proper handling
+        try:
+            resume = db.get_resume(resume_id)
+            if resume:
+                return jsonify({
+                    'status': 'success',
+                    'data': resume
+                })
+            else:
+                return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/analysis/<resume_id>', methods=['GET'])
 def get_analysis_legacy(resume_id):
     """Legacy endpoint for getting analysis"""
-    response = get_analysis(resume_id)
-    if isinstance(response, tuple):
-        return response
-    return response
+    # Handle the case when MongoDB is not available
+    if mongodb_available:
+        return get_analysis(resume_id)
+    else:
+        # Manually call the function with proper handling
+        try:
+            analysis = db.get_analysis(resume_id)
+            if analysis:
+                return jsonify({
+                    'status': 'success',
+                    'data': analysis
+                })
+            else:
+                return jsonify({'status': 'error', 'message': 'Analysis not found'}), 404
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/job-suggestions/<resume_id>', methods=['GET'])
 def get_job_suggestions_legacy(resume_id):
     """Legacy endpoint for getting job suggestions"""
-    response = get_job_suggestions(resume_id)
-    if isinstance(response, tuple):
-        return response
-    return response
+    # Handle the case when MongoDB is not available
+    if mongodb_available:
+        return get_job_suggestions(resume_id)
+    else:
+        # Manually call the function with proper handling
+        try:
+            resume = db.get_resume(resume_id)
+            analysis = db.get_analysis(resume_id)
+            
+            if not resume or not analysis:
+                return jsonify({'status': 'error', 'message': 'Resume or analysis not found'}), 404
+                
+            # Extract key information from resume and analysis
+            resume_content = resume['content']
+            analysis_data = analysis['analysis']
+            
+            # Use mock suggestions
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'resume_id': resume_id,
+                    'job_suggestions': generate_mock_job_suggestions(resume_content),
+                },
+                'meta': {
+                    'source': 'fallback',
+                    'reason': 'In-memory database mode'
+                }
+            })
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health_check_legacy():
