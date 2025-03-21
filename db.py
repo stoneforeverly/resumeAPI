@@ -4,86 +4,102 @@ from dotenv import load_dotenv
 from bson.objectid import ObjectId
 import datetime
 
-# Load environment variables
+# 加载 .env 配置
 load_dotenv()
 
-# MongoDB connection string
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://admin:<db_password>@cluster0.2am5w.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+# MongoDB 连接字符串 
+MONGO_URI = "mongodb+srv://admin:admin@cluster0.2am5w.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
-# Replace <db_password> with actual password if provided via environment variable
-if "<db_password>" in MONGO_URI:
-    db_password = os.getenv("DB_PASSWORD")
-    if db_password:
-        MONGO_URI = MONGO_URI.replace("<db_password>", db_password)
-
-# Flag to track MongoDB availability
+# 标记MongoDB可用性
 mongodb_available = False
 
-try:
-    # Initialize MongoDB client
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    # Ping the server to make sure it's available
-    client.admin.command('ping')
-    print("MongoDB connection successful")
-    db = client.resume_db
+# 内存中的集合类，用作MongoDB的备用方案
+class MemoryCollection:
+    def __init__(self, name):
+        self.name = name
+        self.data = []
+        self.counter = 1
+        
+    def insert_one(self, document):
+        # 如果没有_id则添加一个
+        if '_id' not in document:
+            document['_id'] = str(self.counter)
+            self.counter += 1
+        
+        self.data.append(document)
+        
+        class Result:
+            def __init__(self, inserted_id):
+                self.inserted_id = inserted_id
+                
+        return Result(document['_id'])
     
-    # Collections
+    def find_one(self, query):
+        # 简单的查询匹配
+        for doc in self.data:
+            match = True
+            for key, value in query.items():
+                if key not in doc or doc[key] != value:
+                    match = False
+                    break
+            if match:
+                return doc
+        return None
+    
+    def find(self, query=None):
+        if query is None:
+            # 返回所有文档
+            return self.data
+        
+        # 基本查询匹配
+        results = []
+        for doc in self.data:
+            match = True
+            for key, value in query.items():
+                if key not in doc or doc[key] != value:
+                    match = False
+                    break
+            if match:
+                results.append(doc)
+        return results
+    
+    def update_one(self, query, update):
+        # 查找文档并更新
+        for i, doc in enumerate(self.data):
+            match = True
+            for key, value in query.items():
+                if key not in doc or doc[key] != value:
+                    match = False
+                    break
+            
+            if match:
+                # 处理$set操作符
+                if '$set' in update:
+                    for key, value in update['$set'].items():
+                        self.data[i][key] = value
+                return True
+        return False
+
+try:
+    # 连接 MongoDB
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    # 测试连接
+    client.admin.command('ping')
+    print("✅ MongoDB Atlas 连接成功！")
+    mongodb_available = True
+    
+    # 获取数据库和集合
+    db = client.resume_db
     resumes = db.resumes
     analyses = db.analyses
-    mongodb_available = True
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    # Create fallback data structures
-    class MemoryCollection:
-        def __init__(self):
-            self.data = {}
-            self.counter = 1
-        
-        def insert_one(self, document):
-            # Generate a unique ID
-            if '_id' not in document:
-                document['_id'] = self.counter
-                self.counter += 1
-            self.data[document['_id']] = document
-            return type('obj', (object,), {'inserted_id': document['_id']})
-        
-        def find_one(self, query):
-            for doc_id, doc in self.data.items():
-                # Simple matching for _id queries
-                if '_id' in query and doc_id == query['_id']:
-                    return doc
-            return None
-        
-        def find(self, query=None):
-            # Return all documents for now, as a simple implementation
-            if query is None:
-                return list(self.data.values())
-            
-            results = []
-            for doc in self.data.values():
-                match = True
-                for key, value in query.items():
-                    if key not in doc or doc[key] != value:
-                        match = False
-                        break
-                if match:
-                    results.append(doc)
-            return results
-            
-        def update_one(self, query, update):
-            for doc_id, doc in self.data.items():
-                # Simple matching for _id queries
-                if '_id' in query and doc_id == query['_id']:
-                    # Handle $set operation
-                    if '$set' in update:
-                        for key, value in update['$set'].items():
-                            doc[key] = value
-                    return
     
-    # Create memory-based collections
-    resumes = MemoryCollection()
-    analyses = MemoryCollection()
-    print("Using in-memory storage as fallback")
+except Exception as e:
+    print(f"❌ MongoDB 连接失败: {e}")
+    print("使用内存存储作为备用方案")
+    
+    # 创建内存集合作为备用
+    resumes = MemoryCollection("resumes")
+    analyses = MemoryCollection("analyses")
 
 def save_resume_metadata(filename, filepath, user_id=None):
     """Save resume metadata to database"""

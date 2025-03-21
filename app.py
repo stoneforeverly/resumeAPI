@@ -46,6 +46,7 @@ try:
     # 使用兼容新版本的方式初始化OpenAI客户端
     api_key = os.getenv("OPENAI_API_KEY")
     if api_key:
+        # 简化客户端初始化，仅使用api_key参数
         openai_client = OpenAI(api_key=api_key)
         print("OpenAI client initialized successfully")
     else:
