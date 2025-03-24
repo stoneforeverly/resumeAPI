@@ -102,7 +102,7 @@ except Exception as e:
     analyses = MemoryCollection("analyses")
 
 def save_resume_metadata(filename, filepath, user_id=None):
-    """Save resume metadata to database"""
+    """Save resume metadata to database (legacy function)"""
     try:
         timestamp = datetime.datetime.now()
         
@@ -143,8 +143,8 @@ def update_resume_content(resume_id, content):
         print(f"Error updating resume content: {e}")
         return False
 
-def save_resume(filename, filepath, user_id=None):
-    """Create a new resume entry (legacy function)"""
+def save_resume(filename, filepath, user_id=None, parsed_data=None):
+    """保存简历数据，包括元数据和解析数据"""
     try:
         timestamp = datetime.datetime.now()
         
@@ -152,7 +152,8 @@ def save_resume(filename, filepath, user_id=None):
             "filename": filename,
             "filepath": filepath,
             "upload_date": timestamp,
-            "status": "new",
+            "status": "parsed",  # 标记为已解析
+            "content": parsed_data  # 存储解析内容
         }
         
         if user_id:
@@ -161,7 +162,7 @@ def save_resume(filename, filepath, user_id=None):
         result = resumes.insert_one(resume_data)
         return result.inserted_id
     except Exception as e:
-        print(f"Error saving resume: {e}")
+        print(f"Error saving resume with parsed data: {e}")
         return None
 
 def save_analysis(resume_id, analysis_data):

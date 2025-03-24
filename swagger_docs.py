@@ -3,8 +3,8 @@
 # Resume upload endpoint
 upload_docs = {
     'tags': ['Resume Upload'],
-    'summary': 'Upload a resume file',
-    'description': 'Upload a resume file and store metadata',
+    'summary': 'Upload and parse a resume file',
+    'description': 'Upload a resume file, parse it with OpenAI, and store the structured data',
     'consumes': ['multipart/form-data'],
     'produces': ['application/json'],
     'parameters': [
@@ -25,7 +25,7 @@ upload_docs = {
     ],
     'responses': {
         201: {
-            'description': 'Resume uploaded successfully',
+            'description': 'Resume uploaded and parsed successfully',
             'schema': {
                 'type': 'object',
                 'properties': {
@@ -36,8 +36,42 @@ upload_docs = {
                             'resume_id': {'type': 'string', 'example': '60d21b4567a8d1e6d74c2f1a'},
                             'filename': {'type': 'string', 'example': 'resume.pdf'},
                             'user_id': {'type': 'string', 'example': 'user123'},
-                            'filepath': {'type': 'string', 'example': 'uploads/resume.pdf'},
-                            'file_type': {'type': 'string', 'example': 'pdf'}
+                            'file_type': {'type': 'string', 'example': 'pdf'},
+                            'parsed_data': {
+                                'type': 'object',
+                                'properties': {
+                                    'personal_info': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'name': {'type': 'string', 'example': 'John Doe'},
+                                            'email': {'type': 'string', 'example': 'john.doe@example.com'},
+                                            'phone': {'type': 'string', 'example': '+1 (555) 123-4567'},
+                                            'linkedin': {'type': 'string', 'example': 'linkedin.com/in/johndoe'},
+                                            'location': {'type': 'string', 'example': 'San Francisco, CA'}
+                                        }
+                                    },
+                                    'education': {
+                                        'type': 'array',
+                                        'items': {
+                                            'type': 'object',
+                                            'properties': {
+                                                'institution': {'type': 'string', 'example': 'Stanford University'},
+                                                'degree': {'type': 'string', 'example': 'Bachelor of Science'},
+                                                'field_of_study': {'type': 'string', 'example': 'Computer Science'},
+                                                'date_range': {'type': 'string', 'example': '2016-2020'},
+                                                'gpa': {'type': 'string', 'example': '3.8/4.0'}
+                                            }
+                                        }
+                                    },
+                                    'skills': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'technical': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Python', 'JavaScript', 'React']},
+                                            'soft': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Communication', 'Leadership', 'Problem Solving']}
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -52,6 +86,16 @@ upload_docs = {
                     'message': {'type': 'string', 'example': 'No file uploaded or missing user_id'}
                 }
             }
+        },
+        500: {
+            'description': 'Server error during parsing',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'status': {'type': 'string', 'example': 'error'},
+                    'message': {'type': 'string', 'example': 'Error during resume upload/parsing: Failed to parse with OpenAI'}
+                }
+            }
         }
     }
 }
@@ -59,8 +103,8 @@ upload_docs = {
 # Parse resume endpoint
 parse_docs = {
     'tags': ['Resume Processing'],
-    'summary': 'Parse a resume file',
-    'description': 'Extract content from a previously uploaded resume file',
+    'summary': 'Parse a resume file with OpenAI',
+    'description': 'Extract structured data from a previously uploaded resume file using OpenAI',
     'produces': ['application/json'],
     'parameters': [
         {
@@ -82,7 +126,59 @@ parse_docs = {
                         'type': 'object',
                         'properties': {
                             'resume_id': {'type': 'string', 'example': '60d21b4567a8d1e6d74c2f1a'},
-                            'content': {'type': 'string', 'example': 'Resume content extracted from the file...'}
+                            'content': {
+                                'type': 'object',
+                                'properties': {
+                                    'personal_info': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'name': {'type': 'string', 'example': 'John Doe'},
+                                            'email': {'type': 'string', 'example': 'john.doe@example.com'},
+                                            'phone': {'type': 'string', 'example': '+1 (555) 123-4567'},
+                                            'linkedin': {'type': 'string', 'example': 'linkedin.com/in/johndoe'},
+                                            'location': {'type': 'string', 'example': 'San Francisco, CA'}
+                                        }
+                                    },
+                                    'education': {
+                                        'type': 'array',
+                                        'items': {
+                                            'type': 'object',
+                                            'properties': {
+                                                'institution': {'type': 'string', 'example': 'Stanford University'},
+                                                'degree': {'type': 'string', 'example': 'Bachelor of Science'},
+                                                'field_of_study': {'type': 'string', 'example': 'Computer Science'},
+                                                'date_range': {'type': 'string', 'example': '2016-2020'},
+                                                'gpa': {'type': 'string', 'example': '3.8/4.0'}
+                                            }
+                                        }
+                                    },
+                                    'work_experience': {
+                                        'type': 'array',
+                                        'items': {
+                                            'type': 'object',
+                                            'properties': {
+                                                'company': {'type': 'string', 'example': 'Tech Company Inc'},
+                                                'position': {'type': 'string', 'example': 'Software Engineer'},
+                                                'date_range': {'type': 'string', 'example': '2020-2023'},
+                                                'responsibilities': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Developed web applications', 'Optimized database queries']},
+                                                'achievements': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Reduced page load time by 40%', 'Implemented CI/CD pipeline']}
+                                            }
+                                        }
+                                    },
+                                    'skills': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'technical': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Python', 'JavaScript', 'React']},
+                                            'soft': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Communication', 'Leadership', 'Problem Solving']},
+                                            'languages': {'type': 'array', 'items': {'type': 'string'}, 'example': ['English', 'Spanish']},
+                                            'tools': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Git', 'Docker', 'AWS']}
+                                        }
+                                    },
+                                    'certifications': {'type': 'array', 'items': {'type': 'string'}, 'example': ['AWS Certified Solutions Architect', 'Google Cloud Professional']},
+                                    'summary': {'type': 'string', 'example': 'Experienced software engineer with 3+ years of experience in web development...'}
+                                }
+                            },
+                            'message': {'type': 'string', 'example': 'Resume parsed successfully using OpenAI'}
                         }
                     }
                 }
@@ -104,7 +200,7 @@ parse_docs = {
                 'type': 'object',
                 'properties': {
                     'status': {'type': 'string', 'example': 'error'},
-                    'message': {'type': 'string', 'example': 'Error parsing resume file'}
+                    'message': {'type': 'string', 'example': 'Failed to parse resume: OpenAI API error'}
                 }
             }
         }
@@ -427,11 +523,11 @@ job_suggestions_docs = {
     }
 }
 
-# Compatibility API endpoint
+# Compatibility API
 compatibility_docs = {
     'tags': ['Compatibility API'],
-    'summary': 'Upload and analyze a resume in one step (Legacy API)',
-    'description': 'Backwards compatibility endpoint that uploads, parses and analyzes a resume in a single request',
+    'summary': 'Upload, parse and analyze a resume in one step',
+    'description': 'Legacy endpoint that uploads a resume file, parses it with OpenAI, analyzes it and returns structured data',
     'consumes': ['multipart/form-data'],
     'produces': ['application/json'],
     'parameters': [
@@ -439,7 +535,7 @@ compatibility_docs = {
             'name': 'file',
             'in': 'formData',
             'type': 'file',
-            'required': True,
+            'required': True, 
             'description': 'The resume file to upload (PDF only)'
         },
         {
@@ -452,7 +548,7 @@ compatibility_docs = {
     ],
     'responses': {
         200: {
-            'description': 'Resume uploaded and analyzed successfully',
+            'description': 'Resume processed successfully',
             'schema': {
                 'type': 'object',
                 'properties': {
@@ -461,13 +557,24 @@ compatibility_docs = {
                         'type': 'object',
                         'properties': {
                             'resume_id': {'type': 'string', 'example': '60d21b4567a8d1e6d74c2f1a'},
+                            'parsed_content': {
+                                'type': 'object',
+                                'properties': {
+                                    'personal_info': {'type': 'object'},
+                                    'education': {'type': 'array'},
+                                    'work_experience': {'type': 'array'},
+                                    'skills': {'type': 'object'},
+                                    'certifications': {'type': 'array'},
+                                    'summary': {'type': 'string'}
+                                }
+                            },
                             'analysis': {
                                 'type': 'object',
                                 'properties': {
                                     'overall_score': {'type': 'integer', 'example': 85},
-                                    'strengths': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Strong technical skills', 'Good education', 'Relevant experience']},
-                                    'areas_for_improvement': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Add more quantifiable achievements', 'Improve formatting']},
-                                    'suggestions': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Highlight more accomplishments', 'Add relevant keywords']}
+                                    'strengths': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Strong technical skills', 'Good education background']},
+                                    'areas_for_improvement': {'type': 'array', 'items': {'type': 'string'}, 'example': ['Could add more measurable achievements']},
+                                    'ats_compatibility': {'type': 'object'}
                                 }
                             }
                         }
@@ -482,6 +589,16 @@ compatibility_docs = {
                 'properties': {
                     'status': {'type': 'string', 'example': 'error'},
                     'message': {'type': 'string', 'example': 'No file uploaded or missing user_id'}
+                }
+            }
+        },
+        500: {
+            'description': 'Server error',
+            'schema': {
+                'type': 'object',
+                'properties': {
+                    'status': {'type': 'string', 'example': 'error'},
+                    'message': {'type': 'string', 'example': 'Error processing resume'}
                 }
             }
         }

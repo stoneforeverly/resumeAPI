@@ -59,11 +59,11 @@ def allowed_file(filename):
 
 # RESTful API Endpoints
 
-# Step 1: File Upload - Only uploads the file and stores metadata
+# Step 1: File Upload - Directly parse and store the resume
 @app.route('/api/v1/resumes/upload', methods=['POST'])
 @swag_from(upload_docs)
 def upload_file():
-    """Upload a resume file and store metadata only"""
+    """Upload a resume file, parse it, and store everything in one go"""
     if 'file' not in request.files:
         return jsonify({'status': 'error', 'message': 'No file part'}), 400
     
@@ -77,31 +77,40 @@ def upload_file():
         return jsonify({'status': 'error', 'message': 'user_id is required'}), 400
     
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        
-        # Store metadata with user_id
-        resume_id = db.save_resume_metadata(filename, filepath, user_id)
-        
-        return jsonify({
-            'status': 'success',
-            'data': {
-                'resume_id': str(resume_id),
-                'filename': filename,
-                'user_id': user_id,
-                'filepath': filepath,
-                'file_type': 'pdf'
-            }
-        }), 201
+        try:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # 立即使用OpenAI解析简历内容
+            parsed_data = resume_parser.parse_resume(filepath)
+            
+            # 一次性将所有数据存储到数据库
+            resume_id = db.save_resume(filename, filepath, user_id, parsed_data)
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'resume_id': str(resume_id),
+                    'filename': filename,
+                    'user_id': user_id,
+                    'file_type': 'pdf',
+                    'parsed_data': parsed_data  # 返回解析数据
+                }
+            }), 201
+        except Exception as e:
+            return jsonify({
+                'status': 'error', 
+                'message': f'Error during resume upload/parsing: {str(e)}'
+            }), 500
     
     return jsonify({'status': 'error', 'message': 'Only PDF files are allowed'}), 400
 
-# Step 2: Parse Resume - Extract content from the resume
+# Step 2: Parse Resume - For cases where content wasn't parsed during upload
 @app.route('/api/v1/resumes/<resume_id>/parse', methods=['POST'])
 @swag_from(parse_docs)
 def parse_resume_api(resume_id):
-    """Parse a previously uploaded resume file"""
+    """Parse a previously uploaded resume file (if not already parsed)"""
     try:
         # Get the resume metadata - handle ObjectId based on MongoDB availability
         if mongodb_available:
@@ -112,28 +121,48 @@ def parse_resume_api(resume_id):
         if not resume:
             return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
         
-        # Check if a filepath exists, otherwise use the filename
-        if 'filepath' in resume:
-            filepath = resume['filepath']
-        else:
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+        # Check if resume already has parsed content
+        if 'content' in resume and resume['content'] and resume['status'] == 'parsed':
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'resume_id': resume_id,
+                    'content': resume['content'],
+                    'message': 'Resume was already parsed'
+                }
+            })
         
-        # Parse resume content
-        resume_content = resume_parser.parse_resume(filepath)
-        
-        # Update the resume with parsed content
-        if mongodb_available:
-            db.update_resume_content(ObjectId(resume_id), resume_content)
-        else:
-            db.update_resume_content(resume_id, resume_content)
-        
-        return jsonify({
-            'status': 'success',
-            'data': {
-                'resume_id': resume_id,
-                'content': resume_content
-            }
-        })
+        # Resume needs parsing
+        try:
+            # Get file path
+            if 'filepath' in resume:
+                filepath = resume['filepath']
+            else:
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+            
+            # Parse resume content using OpenAI
+            parsed_data = resume_parser.parse_resume(filepath)
+            
+            # Update the resume with parsed content
+            if mongodb_available:
+                db.update_resume_content(ObjectId(resume_id), parsed_data)
+            else:
+                db.update_resume_content(resume_id, parsed_data)
+            
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'resume_id': resume_id,
+                    'content': parsed_data,
+                    'message': 'Resume parsed successfully using OpenAI'
+                }
+            })
+        except Exception as parse_error:
+            return jsonify({
+                'status': 'error', 
+                'message': f'Failed to parse resume: {str(parse_error)}'
+            }), 500
+            
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
@@ -279,9 +308,15 @@ def get_job_suggestions(resume_id):
         if not resume or not analysis:
             return jsonify({'status': 'error', 'message': 'Resume or analysis not found'}), 404
             
-        # Extract key information from resume and analysis
-        resume_content = resume['content']
+        # 提取关键信息
+        resume_content = resume['content'] 
         analysis_data = analysis['analysis']
+        
+        # 将结构化JSON转换为字符串表示，以便传递给OpenAI
+        if isinstance(resume_content, dict):
+            resume_content_str = json.dumps(resume_content, indent=2)
+        else:
+            resume_content_str = str(resume_content)
         
         # Check if OpenAI client is available
         if openai_client:
@@ -292,7 +327,7 @@ def get_job_suggestions(resume_id):
                     messages=[
                         {"role": "system", "content": "You are a career advisor specializing in job recommendations."},
                         {"role": "user", "content": f"""
-                        Based on the following resume and its analysis, suggest 5 specific job positions 
+                        Based on the following parsed resume and its analysis, suggest 5 specific job positions 
                         that would be a good fit for this candidate. For each position, provide:
                         1. Job title
                         2. Required skills the candidate already has
@@ -302,19 +337,20 @@ def get_job_suggestions(resume_id):
                         
                         Format your response as a JSON array with these fields.
                         
-                        Resume:
-                        {resume_content}
+                        Parsed Resume:
+                        {resume_content_str}
                         
                         Analysis:
                         {analysis_data}
                         """}
                     ],
                     temperature=0.2,
+                    response_format={"type": "json_object"}
                 )
                 
                 # Parse the suggestions
-                suggestions_text = response.choices[0].message.content
-                suggestions = eval(suggestions_text)  # Convert string to Python object
+                suggestions_json = response.choices[0].message.content
+                suggestions = json.loads(suggestions_json)
                 
                 return jsonify({
                     'status': 'success',
@@ -331,7 +367,7 @@ def get_job_suggestions(resume_id):
                     'status': 'success',
                     'data': {
                         'resume_id': resume_id,
-                        'job_suggestions': generate_mock_job_suggestions(resume_content),
+                        'job_suggestions': generate_mock_job_suggestions(resume_content_str),
                     },
                     'meta': {
                         'source': 'fallback',
@@ -344,7 +380,7 @@ def get_job_suggestions(resume_id):
                 'status': 'success',
                 'data': {
                     'resume_id': resume_id,
-                    'job_suggestions': generate_mock_job_suggestions(resume_content),
+                    'job_suggestions': generate_mock_job_suggestions(resume_content_str),
                 },
                 'meta': {
                     'source': 'fallback',
@@ -375,55 +411,44 @@ def health_check():
 def upload_and_analyze_resume():
     """Legacy endpoint to upload and analyze a resume in one step"""
     try:
-        # Check if a file was uploaded
+        # 检查上传文件
         if 'file' not in request.files:
             return jsonify({'status': 'error', 'message': 'No file part'}), 400
         
         file = request.files['file']
         
-        # Check if user_id is provided
+        # 检查user_id
         user_id = request.form.get('user_id')
         if not user_id:
             return jsonify({'status': 'error', 'message': 'Missing user_id parameter'}), 400
         
-        # Check if the file is selected and has an allowed extension
+        # 检查文件名和类型
         if file.filename == '':
             return jsonify({'status': 'error', 'message': 'No file selected'}), 400
         
         if not allowed_file(file.filename):
             return jsonify({'status': 'error', 'message': 'Only PDF files are allowed'}), 415
         
-        # Create upload folder if it doesn't exist
+        # 确保上传目录存在
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         
-        # Secure the filename and save the file
+        # 安全保存文件
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
         
-        # Save resume metadata to database
-        resume_id = db.save_resume(filename, filepath, user_id)
+        # 使用OpenAI解析简历
+        parsed_data = resume_parser.parse_resume(filepath)
         
-        # Parse resume
-        resume_content = resume_parser.parse_resume(filepath)
+        # 一次性存储简历和解析内容
+        resume_id = db.save_resume(filename, filepath, user_id, parsed_data)
         
-        # Update resume with parsed content
+        # 分析简历
+        analysis = resume_analyzer.analyze_resume(parsed_data)
+        
+        # 保存分析结果
         if mongodb_available:
-            # Check if resume_id is already an ObjectId instance
-            if not isinstance(resume_id, ObjectId):
-                resume_id_obj = ObjectId(resume_id)
-            else:
-                resume_id_obj = resume_id
-            db.update_resume_content(resume_id_obj, resume_content)
-        else:
-            db.update_resume_content(resume_id, resume_content)
-        
-        # Analyze the resume
-        analysis = resume_analyzer.analyze_resume(resume_content)
-        
-        # Save analysis to database
-        if mongodb_available:
-            # Check if resume_id is already an ObjectId instance
+            # 检查resume_id是否已经是ObjectId实例
             if not isinstance(resume_id, ObjectId):
                 resume_id_obj = ObjectId(resume_id)
             else:
@@ -432,11 +457,12 @@ def upload_and_analyze_resume():
         else:
             analysis_id = db.save_analysis(resume_id, analysis)
         
-        # Return success with resume ID and analysis
+        # 返回结果
         return jsonify({
             'status': 'success',
             'data': {
                 'resume_id': str(resume_id),
+                'parsed_content': parsed_data,
                 'analysis': analysis
             }
         })
@@ -515,6 +541,11 @@ def get_resume_legacy(resume_id):
         try:
             resume = db.get_resume(resume_id)
             if resume:
+                # 处理简历内容格式
+                if 'content' in resume and isinstance(resume['content'], dict):
+                    # 确保内容可以序列化为JSON
+                    resume['content'] = json.dumps(resume['content'])
+                
                 return jsonify({
                     'status': 'success',
                     'data': resume
