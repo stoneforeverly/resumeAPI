@@ -22,7 +22,6 @@ if USE_GEMINI:
 openai_client = None
 if USE_OPENAI:
     try:
-        # 使用兼容新版本的方式初始化OpenAI客户端
         openai_client = OpenAI(api_key=OPENAI_API_KEY)
         print("Resume analyzer: OpenAI client initialized successfully") 
     except Exception as e:
@@ -34,83 +33,83 @@ def analyze_resume(resume_text):
     Analyze resume content using LLM (either Google Gemini or OpenAI GPT)
     and return analysis and scores
     """
-    # Define the prompt for resume analysis
     prompt = f"""
-    You are a professional HR and resume specialist. Analyze the following resume and provide:
-    
-    1. An overall score from 0-100
-    2. Strengths (3-5 points)
-    3. Areas for improvement (3-5 points)
-    4. Suggestions for enhancement
-    5. How well the resume would pass through ATS systems
-    
-    Format your response as a JSON object with the following structure:
-    {{
-        "overall_score": <score>,
-        "strengths": [<list of strengths>],
-        "areas_for_improvement": [<list of areas for improvement>],
-        "suggestions": [<list of suggestions>],
-        "ats_compatibility": {{
-            "score": <score 0-100>,
-            "comments": <string>
-        }}
-    }}
-    
-    Resume:
-    {resume_text}
+You are a senior hiring manager and resume evaluation expert specializing in software engineering and machine learning engineering roles.
+
+Please analyze the following resume and evaluate it as if it were submitted for a position in software development or machine learning engineering (MLE). Provide an expert-level review focusing on both technical and structural aspects.
+
+Your response must be a **strictly valid JSON object** with the following structure:
+
+{{
+  "overall_score": <integer 0-100>,
+  "technical_score": <integer 0-100>,
+  "communication_score": <integer 0-100>,
+  "ats_compatibility_score": <integer 0-100>,
+  "strengths": [<list of strengths>],
+  "areas_for_improvement": [<list of areas for improvement>],
+  "suggestions": [<list of practical suggestions>],
+  "ats_compatibility": {{
+    "score": <integer>,
+    "comments": <string>
+  }}
+}}
+
+Evaluation Criteria:
+- Relevance of technical skills (languages, frameworks, ML tools, cloud, etc.)
+- Clarity and structure of work experience (roles, achievements, measurable impact)
+- Use of metrics to quantify results
+- Presence of strong project experience (open-source, production-level, or research)
+- Communication quality and readability
+- ATS-friendly formatting and relevant keywords
+- Relevance of education, certifications, and training
+
+Please **only return JSON**. Do NOT use code blocks (like ```json), markdown, or explanation.
+
+Resume:
+{resume_text}
     """
-    
+
     if USE_OPENAI and openai_client:
         return analyze_with_openai(prompt)
     elif USE_GEMINI:
         return analyze_with_gemini(prompt)
     else:
-        # Generate a mock analysis
         return generate_mock_analysis(resume_text)
-
-def analyze_with_gemini(prompt):
-    """Use Google's Gemini model for analysis"""
-    model = GenerativeModel('gemini-pro')
-    response = model.generate_content(prompt)
-    
-    try:
-        # Parse the response JSON
-        result = json.loads(response.text)
-        return result
-    except json.JSONDecodeError:
-        # If response is not valid JSON, return a simplified response
-        return {
-            "error": "Failed to parse model response",
-            "raw_response": response.text
-        }
 
 def analyze_with_openai(prompt):
     """Use OpenAI's GPT model for analysis"""
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a professional resume analysis assistant."},
+                {"role": "system", "content": "You are a professional resume analysis assistant. Return only JSON. No explanations or markdown."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.2,
         )
-        
-        # Parse the response JSON
-        result_text = response.choices[0].message.content
-        try:
-            result = json.loads(result_text)
-            return result
-        except json.JSONDecodeError:
-            # If response is not valid JSON, return a simplified response
-            return {
-                "error": "Failed to parse model response",
-                "raw_response": result_text
-            }
+
+        result_text = response.choices[0].message.content.strip()
+
+        # Clean up markdown code block if present
+        if result_text.startswith("```json"):
+            result_text = result_text[len("```json"):].strip()
+        if result_text.endswith("```"):
+            result_text = result_text[:-3].strip()
+
+        return json.loads(result_text)
+
+    except json.JSONDecodeError:
+        return {
+            "error": "Failed to parse model response",
+            "raw_response": result_text
+        }
     except Exception as e:
         return {
             "error": f"OpenAI API error: {str(e)}",
             "overall_score": 50,
+            "technical_score": 50,
+            "communication_score": 50,
+            "ats_compatibility_score": 50,
             "strengths": ["Unable to analyze due to API error"],
             "areas_for_improvement": ["Try again later"],
             "suggestions": ["Check API key configuration"],
@@ -120,45 +119,54 @@ def analyze_with_openai(prompt):
             }
         }
 
+def analyze_with_gemini(prompt):
+    """Use Google's Gemini model for analysis"""
+    model = GenerativeModel('gemini-pro')
+    response = model.generate_content(prompt)
+    try:
+        return json.loads(response.text)
+    except json.JSONDecodeError:
+        return {
+            "error": "Failed to parse model response",
+            "raw_response": response.text
+        }
+
 def generate_mock_analysis(resume_text):
     """Generate a mock analysis when no AI service is available"""
-    # Count the keywords that indicate a good resume
-    quality_keywords = ["experience", "skill", "project", "education", "certification", "achievement"]
-    score = 65  # Base score
-    
-    # Basic scoring based on text length and keywords
+    quality_keywords = ["python", "tensorflow", "ml", "project", "api", "deployment"]
+    score = 65
     words = resume_text.lower().split()
     word_count = len(words)
-    
+
     if word_count > 300:
         score += 10
-    
     for keyword in quality_keywords:
-        if keyword in resume_text.lower():
+        if keyword in words:
             score += 5
-    
-    # Cap the score at 95
     score = min(score, 95)
-    
+
     return {
         "overall_score": score,
+        "technical_score": score - 5,
+        "communication_score": 70,
+        "ats_compatibility_score": score - 10,
         "strengths": [
-            "Clear presentation of work experience",
-            "Good listing of technical skills",
-            "Education credentials well presented"
+            "Strong programming language usage",
+            "Projects clearly explained",
+            "Solid educational background"
         ],
         "areas_for_improvement": [
-            "Could use more quantifiable achievements",
-            "Consider adding more keywords for ATS systems",
-            "Tailor resume more specifically to desired positions"
+            "Lack of quantified impact",
+            "Could expand on ML tools experience",
+            "Professional summary could be improved"
         ],
         "suggestions": [
-            "Add measurable impacts of your work (e.g., 'increased efficiency by 25%')",
-            "Include relevant industry keywords to improve ATS matching",
-            "Create a stronger professional summary section"
+            "Add metrics to work achievements",
+            "Highlight ML project impact in production",
+            "Improve formatting for ATS optimization"
         ],
         "ats_compatibility": {
-            "score": score - 5,
-            "comments": "The resume has good structure but could benefit from more industry-specific keywords for better ATS performance."
+            "score": score - 10,
+            "comments": "Formatting is mostly good, but keywords could be improved for ATS."
         }
-    } 
+    }
