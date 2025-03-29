@@ -9,6 +9,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import json
 from flasgger import Swagger, swag_from
+from flask_cors import CORS  # 导入CORS
 
 # 导入Swagger配置
 from swagger_config import swagger_config, swagger_template
@@ -28,6 +29,9 @@ from swagger_docs import (
 load_dotenv()
 
 app = Flask(__name__)
+# 启用CORS，允许所有来源
+CORS(app, resources={r"/*": {"origins": "*"}})
+
 app.config['UPLOAD_FOLDER'] = 'uploads/'
 app.config['ALLOWED_EXTENSIONS'] = {'pdf'}  # 只允许PDF文件
 

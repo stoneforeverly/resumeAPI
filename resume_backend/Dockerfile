@@ -25,6 +25,9 @@ EXPOSE 8080
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_ENV=production
 ENV PORT=8080
+# Explicitly disable proxies to avoid issues with OpenAI client
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
 
 # Command to run the application
 CMD ["python", "app.py"] 
