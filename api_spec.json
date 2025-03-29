@@ -1,0 +1,1199 @@
+{
+  "info": {
+    "contact": {
+      "email": "support@resumeanalysis.com"
+    },
+    "description": "API for uploading, parsing, analyzing resumes and getting job recommendations",
+    "title": "Resume Analysis API",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/resumes": {
+      "post": {
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "description": "Legacy endpoint that uploads a resume file, parses it with OpenAI, analyzes it and returns structured data",
+        "parameters": [
+          {
+            "description": "The resume file to upload (PDF only)",
+            "in": "formData",
+            "name": "file",
+            "required": true,
+            "type": "file"
+          },
+          {
+            "description": "User ID associated with the resume",
+            "in": "formData",
+            "name": "user_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resume processed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "analysis": {
+                      "properties": {
+                        "areas_for_improvement": {
+                          "example": [
+                            "Could add more measurable achievements"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ats_compatibility": {
+                          "type": "object"
+                        },
+                        "overall_score": {
+                          "example": 85,
+                          "type": "integer"
+                        },
+                        "strengths": {
+                          "example": [
+                            "Strong technical skills",
+                            "Good education background"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "parsed_content": {
+                      "properties": {
+                        "certifications": {
+                          "type": "array"
+                        },
+                        "education": {
+                          "type": "array"
+                        },
+                        "personal_info": {
+                          "type": "object"
+                        },
+                        "skills": {
+                          "type": "object"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "work_experience": {
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "No file uploaded or missing user_id",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Error processing resume",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Legacy endpoint to upload and analyze a resume in one step",
+        "tags": [
+          "Compatibility API"
+        ]
+      }
+    },
+    "/api/v1/analyses/{resume_id}": {
+      "get": {
+        "description": "Retrieve the analysis for a specific resume",
+        "parameters": [
+          {
+            "description": "Resume ID to retrieve analysis for",
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis retrieved successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "analysis": {
+                      "properties": {
+                        "areas_for_improvement": {
+                          "example": [
+                            "Add more quantifiable achievements",
+                            "Improve formatting"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ats_compatibility": {
+                          "properties": {
+                            "comments": {
+                              "example": "Good structure, but add more industry keywords",
+                              "type": "string"
+                            },
+                            "score": {
+                              "example": 80,
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "overall_score": {
+                          "example": 85,
+                          "type": "integer"
+                        },
+                        "strengths": {
+                          "example": [
+                            "Strong technical skills",
+                            "Good education",
+                            "Relevant experience"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "suggestions": {
+                          "example": [
+                            "Highlight more accomplishments",
+                            "Add relevant keywords"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "analysis_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1b",
+                      "type": "string"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Analysis not found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Analysis not found for this resume",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get the analysis for a specific resume",
+        "tags": [
+          "Resume Analysis"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "description": "Check if the API is up and running",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "service": {
+                      "example": "Resume API",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": "healthy",
+                      "type": "string"
+                    },
+                    "version": {
+                      "example": "1.0.0",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Health check endpoint",
+        "tags": [
+          "System"
+        ]
+      }
+    },
+    "/api/v1/resumes": {
+      "get": {
+        "description": "Retrieve a list of all resumes uploaded by a specific user",
+        "parameters": [
+          {
+            "description": "User ID to retrieve resumes for",
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of resumes retrieved successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "properties": {
+                      "filename": {
+                        "example": "resume_john_doe.pdf",
+                        "type": "string"
+                      },
+                      "resume_id": {
+                        "example": "60d21b4567a8d1e6d74c2f1a",
+                        "type": "string"
+                      },
+                      "status": {
+                        "example": "parsed",
+                        "type": "string"
+                      },
+                      "upload_date": {
+                        "example": "2023-05-01T10:00:00Z",
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "example": "user123",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Missing user_id parameter",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "No resumes found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "No resumes found for this user",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "List all resumes for a user",
+        "tags": [
+          "Resume Management"
+        ]
+      }
+    },
+    "/api/v1/resumes/upload": {
+      "post": {
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "description": "Upload a resume file, parse it with OpenAI, and store the structured data",
+        "parameters": [
+          {
+            "description": "The resume file to upload (PDF only)",
+            "in": "formData",
+            "name": "file",
+            "required": true,
+            "type": "file"
+          },
+          {
+            "description": "User ID associated with the resume",
+            "in": "formData",
+            "name": "user_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Resume uploaded and parsed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "file_type": {
+                      "example": "pdf",
+                      "type": "string"
+                    },
+                    "filename": {
+                      "example": "resume.pdf",
+                      "type": "string"
+                    },
+                    "parsed_data": {
+                      "properties": {
+                        "education": {
+                          "items": {
+                            "properties": {
+                              "date_range": {
+                                "example": "2016-2020",
+                                "type": "string"
+                              },
+                              "degree": {
+                                "example": "Bachelor of Science",
+                                "type": "string"
+                              },
+                              "field_of_study": {
+                                "example": "Computer Science",
+                                "type": "string"
+                              },
+                              "gpa": {
+                                "example": "3.8/4.0",
+                                "type": "string"
+                              },
+                              "institution": {
+                                "example": "Stanford University",
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "personal_info": {
+                          "properties": {
+                            "email": {
+                              "example": "john.doe@example.com",
+                              "type": "string"
+                            },
+                            "linkedin": {
+                              "example": "linkedin.com/in/johndoe",
+                              "type": "string"
+                            },
+                            "location": {
+                              "example": "San Francisco, CA",
+                              "type": "string"
+                            },
+                            "name": {
+                              "example": "John Doe",
+                              "type": "string"
+                            },
+                            "phone": {
+                              "example": "+1 (555) 123-4567",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "skills": {
+                          "properties": {
+                            "soft": {
+                              "example": [
+                                "Communication",
+                                "Leadership",
+                                "Problem Solving"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "technical": {
+                              "example": [
+                                "Python",
+                                "JavaScript",
+                                "React"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "example": "user123",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "No file uploaded or missing user_id",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Server error during parsing",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Error during resume upload/parsing: Failed to parse with OpenAI",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Upload a resume file, parse it, and store everything in one go",
+        "tags": [
+          "Resume Upload"
+        ]
+      }
+    },
+    "/api/v1/resumes/{resume_id}": {
+      "get": {
+        "description": "Retrieve details for a specific resume by ID",
+        "parameters": [
+          {
+            "description": "Resume ID to retrieve",
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resume retrieved successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "analysis": {
+                      "properties": {
+                        "areas_for_improvement": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "overall_score": {
+                          "example": 85,
+                          "type": "integer"
+                        },
+                        "strengths": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "content": {
+                      "example": "Resume content...",
+                      "type": "string"
+                    },
+                    "filename": {
+                      "example": "resume_john_doe.pdf",
+                      "type": "string"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": "parsed",
+                      "type": "string"
+                    },
+                    "upload_date": {
+                      "example": "2023-05-01T10:00:00Z",
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "user_id": {
+                      "example": "user123",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Resume not found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Resume not found",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get a specific resume by ID",
+        "tags": [
+          "Resume Management"
+        ]
+      }
+    },
+    "/api/v1/resumes/{resume_id}/analyze": {
+      "post": {
+        "description": "Generate analysis and scores for a previously parsed resume using AI",
+        "parameters": [
+          {
+            "description": "Resume ID to analyze",
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resume analyzed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "analysis": {
+                      "properties": {
+                        "areas_for_improvement": {
+                          "example": [
+                            "Add more quantifiable achievements",
+                            "Improve formatting"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "ats_compatibility": {
+                          "properties": {
+                            "comments": {
+                              "example": "Good structure, but add more industry keywords",
+                              "type": "string"
+                            },
+                            "score": {
+                              "example": 80,
+                              "type": "integer"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "overall_score": {
+                          "example": 85,
+                          "type": "integer"
+                        },
+                        "strengths": {
+                          "example": [
+                            "Strong technical skills",
+                            "Good education",
+                            "Relevant experience"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "suggestions": {
+                          "example": [
+                            "Highlight more accomplishments",
+                            "Add relevant keywords"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "analysis_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1b",
+                      "type": "string"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Resume has not been parsed yet",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Resume not found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Resume not found",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Error analyzing resume",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Analyze a previously parsed resume",
+        "tags": [
+          "Resume Processing"
+        ]
+      }
+    },
+    "/api/v1/resumes/{resume_id}/job-suggestions": {
+      "get": {
+        "description": "Generate job suggestions and recommendations based on a resume",
+        "parameters": [
+          {
+            "description": "Resume ID to generate job suggestions for",
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Job suggestions generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "job_suggestions": {
+                      "items": {
+                        "properties": {
+                          "description": {
+                            "example": "This role aligns with your experience in Python development",
+                            "type": "string"
+                          },
+                          "match_score": {
+                            "example": 85,
+                            "type": "integer"
+                          },
+                          "skills_match": {
+                            "example": [
+                              "Python",
+                              "Flask",
+                              "MongoDB"
+                            ],
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "title": {
+                            "example": "Senior Software Engineer",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Resume not found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Resume not found",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get job suggestions based on a resume",
+        "tags": [
+          "Job Suggestions"
+        ]
+      }
+    },
+    "/api/v1/resumes/{resume_id}/parse": {
+      "post": {
+        "description": "Extract structured data from a previously uploaded resume file using OpenAI",
+        "parameters": [
+          {
+            "description": "Resume ID to parse",
+            "in": "path",
+            "name": "resume_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resume parsed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "properties": {
+                    "content": {
+                      "properties": {
+                        "certifications": {
+                          "example": [
+                            "AWS Certified Solutions Architect",
+                            "Google Cloud Professional"
+                          ],
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "education": {
+                          "items": {
+                            "properties": {
+                              "date_range": {
+                                "example": "2016-2020",
+                                "type": "string"
+                              },
+                              "degree": {
+                                "example": "Bachelor of Science",
+                                "type": "string"
+                              },
+                              "field_of_study": {
+                                "example": "Computer Science",
+                                "type": "string"
+                              },
+                              "gpa": {
+                                "example": "3.8/4.0",
+                                "type": "string"
+                              },
+                              "institution": {
+                                "example": "Stanford University",
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "personal_info": {
+                          "properties": {
+                            "email": {
+                              "example": "john.doe@example.com",
+                              "type": "string"
+                            },
+                            "linkedin": {
+                              "example": "linkedin.com/in/johndoe",
+                              "type": "string"
+                            },
+                            "location": {
+                              "example": "San Francisco, CA",
+                              "type": "string"
+                            },
+                            "name": {
+                              "example": "John Doe",
+                              "type": "string"
+                            },
+                            "phone": {
+                              "example": "+1 (555) 123-4567",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "skills": {
+                          "properties": {
+                            "languages": {
+                              "example": [
+                                "English",
+                                "Spanish"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "soft": {
+                              "example": [
+                                "Communication",
+                                "Leadership",
+                                "Problem Solving"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "technical": {
+                              "example": [
+                                "Python",
+                                "JavaScript",
+                                "React"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "tools": {
+                              "example": [
+                                "Git",
+                                "Docker",
+                                "AWS"
+                              ],
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "summary": {
+                          "example": "Experienced software engineer with 3+ years of experience in web development...",
+                          "type": "string"
+                        },
+                        "work_experience": {
+                          "items": {
+                            "properties": {
+                              "achievements": {
+                                "example": [
+                                  "Reduced page load time by 40%",
+                                  "Implemented CI/CD pipeline"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "company": {
+                                "example": "Tech Company Inc",
+                                "type": "string"
+                              },
+                              "date_range": {
+                                "example": "2020-2023",
+                                "type": "string"
+                              },
+                              "position": {
+                                "example": "Software Engineer",
+                                "type": "string"
+                              },
+                              "responsibilities": {
+                                "example": [
+                                  "Developed web applications",
+                                  "Optimized database queries"
+                                ],
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "example": "Resume parsed successfully using OpenAI",
+                      "type": "string"
+                    },
+                    "resume_id": {
+                      "example": "60d21b4567a8d1e6d74c2f1a",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Resume not found",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Resume not found",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Failed to parse resume: OpenAI API error",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "error",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Parse a previously uploaded resume file (if not already parsed)",
+        "tags": [
+          "Resume Processing"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "description": "Resume upload operations",
+      "name": "Resume Upload"
+    },
+    {
+      "description": "Resume parsing and processing operations",
+      "name": "Resume Processing"
+    },
+    {
+      "description": "Job recommendation operations",
+      "name": "Job Suggestions"
+    },
+    {
+      "description": "Operations related to managing resumes",
+      "name": "Resume Management"
+    },
+    {
+      "description": "Resume analysis and scoring operations",
+      "name": "Resume Analysis"
+    },
+    {
+      "description": "Legacy API endpoints for backward compatibility",
+      "name": "Compatibility API"
+    }
+  ]
+}
