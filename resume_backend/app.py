@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 import os
 from werkzeug.utils import secure_filename
 import resume_parser
@@ -617,6 +617,87 @@ def get_job_suggestions_legacy(resume_id):
 def health_check_legacy():
     """Legacy health check endpoint"""
     return health_check()
+
+# Add new API endpoint to update resume content
+@app.route('/api/v1/resumes/<resume_id>/content', methods=['PUT'])
+def update_resume_content_api(resume_id):
+    """Update resume content with edited data"""
+    try:
+        # Get the request data
+        request_data = request.json
+        if not request_data or 'content' not in request_data:
+            return jsonify({'status': 'error', 'message': 'Content is required'}), 400
+            
+        content = request_data['content']
+        
+        # Convert resume_id to ObjectId if using MongoDB
+        if mongodb_available:
+            try:
+                resume_id = ObjectId(resume_id)
+            except:
+                pass
+        
+        # Check if resume exists
+        resume = db.get_resume(resume_id)
+        if not resume:
+            return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
+            
+        # Update the resume content
+        result = db.update_resume_content(resume_id, content)
+        
+        if result:
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'resume_id': str(resume_id),
+                    'message': 'Resume content updated successfully'
+                }
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to update resume content'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Add new API endpoint to download optimized resume
+@app.route('/api/v1/resumes/<resume_id>/download', methods=['GET'])
+def download_resume_api(resume_id):
+    """Download the optimized resume as PDF"""
+    try:
+        # Convert resume_id to ObjectId if using MongoDB
+        if mongodb_available:
+            try:
+                resume_id = ObjectId(resume_id)
+            except:
+                pass
+                
+        # Get the resume
+        resume = db.get_resume(resume_id)
+        if not resume:
+            return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
+            
+        # For now, we'll return the original PDF
+        # In a real implementation, you would generate a new PDF with the updated content
+        if 'filepath' in resume:
+            filepath = resume['filepath']
+        else:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+            
+        if not os.path.exists(filepath):
+            return jsonify({'status': 'error', 'message': 'Resume file not found'}), 404
+            
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=f"optimized_{resume['filename']}",
+            mimetype='application/pdf'
+        )
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     # Use port 8080 instead of 5000 which is used by AirPlay on Mac

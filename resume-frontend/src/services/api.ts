@@ -52,6 +52,18 @@ export const resumeApi = {
   getJobSuggestions: async (resumeId: string) => {
     return api.get(`/resumes/${resumeId}/job-suggestions`);
   },
+
+  // Update resume content
+  updateResumeContent: async (resumeId: string, content: any) => {
+    return api.put(`/resumes/${resumeId}/content`, { content });
+  },
+  
+  // Download optimized resume
+  downloadResume: async (resumeId: string) => {
+    return api.get(`/resumes/${resumeId}/download`, {
+      responseType: 'blob',
+    });
+  },
 };
 
 // Auth API functions

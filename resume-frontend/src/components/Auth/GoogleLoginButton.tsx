@@ -49,7 +49,7 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
       fullWidth={fullWidth}
       size={size}
     >
-      使用Google账号登录
+      Sign in with Google
     </Button>
   );
 };
