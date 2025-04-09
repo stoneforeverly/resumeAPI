@@ -1,0 +1,75 @@
+name: Deploy Backend to ECR
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: your-backend-repo
+  IMAGE_TAG: ${{ github.sha }}
+  KEEP_LAST_IMAGES: 5  # 保留最近5个镜像
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build backend Docker image
+        run: |
+          cd backend
+          docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+                       -t ${{ env.ECR_REPOSITORY }}:latest .
+
+      - name: Tag and push backend image
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          docker tag ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker tag ${{ env.ECR_REPOSITORY }}:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+
+      - name: Cleanup old backend images
+        run: |
+          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          REPO=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}
+          
+          # 获取所有镜像并按推送时间排序
+          IMAGES=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} \
+                  --query 'sort_by(imageDetails,& imagePushedAt)[*].imageTags[0]' \
+                  --output json | jq -r '.[]' | grep -v "latest")
+          
+          # 计算需要删除的镜像数量
+          TOTAL_IMAGES=$(echo "$IMAGES" | wc -l)
+          IMAGES_TO_DELETE=$((TOTAL_IMAGES - ${{ env.KEEP_LAST_IMAGES }}))
+          
+          if [ $IMAGES_TO_DELETE -gt 0 ]; then
+            echo "Will delete $IMAGES_TO_DELETE old images"
+            OLD_IMAGES=$(echo "$IMAGES" | head -n $IMAGES_TO_DELETE)
+            
+            for IMAGE in $OLD_IMAGES; do
+              echo "Deleting $IMAGE"
+              aws ecr batch-delete-image \
+                --repository-name ${{ env.ECR_REPOSITORY }} \
+                --image-ids imageTag=$IMAGE
+            done
+          else
+            echo "No images to delete"
+          fi
