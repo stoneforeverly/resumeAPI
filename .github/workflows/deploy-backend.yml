@@ -13,7 +13,7 @@ env:
   KEEP_LAST_IMAGES: 5  # 保留最近5个镜像
 
 jobs:
-  deploy-backend:
+  deploy-resume:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -36,7 +36,7 @@ jobs:
 
       - name: Build backend Docker image
         run: |
-          cd backend
+          cd resume_backend
           docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
                        -t ${{ env.ECR_REPOSITORY }}:latest .
 
