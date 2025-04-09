@@ -1,4 +1,4 @@
-name: Deploy Backend to ECR
+name: Deploy Resume Backend to ECR
 
 on:
   push:
