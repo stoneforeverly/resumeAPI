@@ -6,7 +6,7 @@ on:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: your-backend-repo
+  ECR_REPOSITORY: backend-repo
   IMAGE_TAG: ${{ github.sha }}
   KEEP_LAST_IMAGES: 5  # 保留最近5个镜像
 
