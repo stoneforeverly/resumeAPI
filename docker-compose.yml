@@ -6,7 +6,6 @@ services:
     build:
       context: ./resume_backend
       dockerfile: Dockerfile
-      image: frontend:latest 
     container_name: resume-backend
     ports:
       - "8080:8080"
@@ -30,7 +29,6 @@ services:
     build:
       context: ./resume-frontend
       dockerfile: Dockerfile
-      image: frontend:latest 
       args:
         - REACT_APP_API_URL=http://localhost:8080/api/v1
     container_name: resume-frontend
