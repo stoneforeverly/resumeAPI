@@ -7,11 +7,12 @@ on:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: resume_backend-repo
+  DOCKER_COMPOSE_FILE: docker-compose.yml # compose 文件路径
   IMAGE_TAG: ${{ github.sha }}
   KEEP_LAST_IMAGES: 5  # 保留最近5个镜像
 
 jobs:
-  deploy-resume:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -19,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -30,24 +31,29 @@ jobs:
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build backend Docker image
+      - name: Build and push backend Docker image
         run: |
           cd resume_backend
           docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
                        -t ${{ env.ECR_REPOSITORY }}:latest .
 
-      - name: Tag and push backend image
-        if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
+      - name: Build and Push Frontend
+        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          docker tag ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker tag ${{ env.ECR_REPOSITORY }}:latest $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend
+          docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ github.sha }}
 
-      - name: Cleanup old backend images
+      - name: Build and Push Backend
+        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
+        run: |
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
+          docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ github.sha }}
+
+      - name: Cleanup old old images
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           REPO=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}
