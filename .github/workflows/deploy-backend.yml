@@ -37,12 +37,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push backend Docker image
-        run: |
-          cd resume_backend
-          docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} \
-                       -t ${{ env.ECR_REPOSITORY }}:latest .
-
       - name: Build and Push Frontend
         # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
