@@ -77,6 +77,11 @@ export const resumeApi = {
   }) => {
     return api.post(`/resumes/${resumeId}/optimize-content`, data);
   },
+
+  // 删除简历
+  deleteResume: async (resumeId: string) => {
+    return api.delete(`/resumes/${resumeId}`);
+  },
 };
 
 // Auth API functions

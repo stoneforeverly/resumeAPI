@@ -1,350 +1,61 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  CircularProgress, 
-  Grid,
-  Card,
-  CardContent,
-  CardHeader,
-  IconButton,
-  TextField,
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
   Button,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Snackbar,
   Stack,
   Tab,
   Tabs,
-  Snackbar,
-  Alert
+  TextField,
+  Typography,
+  Alert,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
-import DeleteIcon from '@mui/icons-material/Delete';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import EditNoteIcon from '@mui/icons-material/EditNote';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  PointerSensor,
+  KeyboardSensor,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
+  verticalListSortingStrategy,
   sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy
+  arrayMove
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+
+// 导入API服务
 import { resumeApi } from '../../services/api';
+
+// 导入重构后的组件
+import SortableSection from './SortableSection';
+import SortableList from './SortableList';
+import SortableItem from './SortableItem';
+import ResumeScoreCard from './ResumeScoreCard';
+import JobTargetCard from './JobTargetCard';
+import OptimizeButton from './OptimizeButton';
 import ResumePreview from './ResumePreview';
+
+// 导入类型
+import { ResumeData, AnalysisData } from './utils/types';
 
 interface ResumeEditorProps {
   resumeId: string;
   onComplete?: () => void;
 }
-
-interface ResumeData {
-  [key: string]: any;
-  personal_info?: any;
-  summary?: string;
-  experience?: any[];
-  education?: any[];
-  skills?: any;
-}
-
-interface SortableSectionProps {
-  id: string;
-  section: string;
-  resumeData: ResumeData;
-  editMode: {[key: string]: boolean};
-  handleEdit: (section: string) => void;
-  handleSave: (section: string) => void;
-  renderSectionEditor: (section: string, title: string) => React.ReactNode;
-}
-
-interface SortableItemProps {
-  id: string;
-  item: any;
-  index: number;
-  sectionKey: string;
-  isLast: boolean;
-}
-
-interface SortableListProps {
-  items: any[];
-  sectionKey: string;
-  onReorder: (newItems: any[]) => void;
-}
-
-const SortableItem: React.FC<SortableItemProps> = ({ id, item, index, sectionKey, isLast }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1 : 'auto',
-    position: 'relative' as const
-  };
-
-  return (
-    <ListItem
-      ref={setNodeRef}
-      style={style}
-      key={index}
-      alignItems="flex-start"
-      divider={!isLast}
-      {...attributes}
-    >
-      <Box 
-        {...listeners} 
-        sx={{ 
-          position: 'absolute', 
-          left: -30, 
-          top: '50%', 
-          transform: 'translateY(-50%)',
-          cursor: 'grab',
-          color: 'text.secondary',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          '&:hover': { color: 'primary.main' }
-        }}
-      >
-        <DragIndicatorIcon fontSize="small" />
-      </Box>
-      <ListItemText
-        primary={
-          <Typography variant="subtitle1" fontWeight="bold">
-            {item.title || item.position || item.degree || item.company || item.institution || `Item ${index + 1}`}
-          </Typography>
-        }
-        secondary={
-          <Box sx={{ mt: 1 }}>
-            {Object.entries(item)
-              .filter(([key]) => !['title', 'position', 'degree', 'company', 'institution'].includes(key))
-              .map(([key, value]) => {
-                // Simple string fields
-                if (typeof value === 'string') {
-                  return (
-                    <Typography key={key} variant="body2" component="div" sx={{ mb: 1 }}>
-                      <strong>{key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:</strong> {value}
-                    </Typography>
-                  );
-                }
-                
-                // String array fields (like responsibilities)
-                if (Array.isArray(value) && typeof value[0] === 'string') {
-                  return (
-                    <Box key={key} sx={{ mb: 2 }}>
-                      <Typography variant="body2" fontWeight="bold">
-                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
-                      </Typography>
-                      <Box component="ul" sx={{ pl: 2, mt: 0.5, mb: 0 }}>
-                        {value.map((item: string, i: number) => (
-                          <Typography key={i} component="li" variant="body2" sx={{ mb: 0.5 }}>
-                            {item}
-                          </Typography>
-                        ))}
-                      </Box>
-                    </Box>
-                  );
-                }
-                
-                // Object array fields (like projects)
-                if (Array.isArray(value) && typeof value[0] === 'object') {
-                  return (
-                    <Box key={key} sx={{ mb: 2 }}>
-                      <Typography variant="body2" fontWeight="bold">
-                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
-                      </Typography>
-                      <Box sx={{ pl: 2, mt: 0.5 }}>
-                        {value.map((project: any, i: number) => (
-                          <Box key={i} sx={{ mb: 2 }}>
-                            {/* Recursive rendering of nested object structure */}
-                            {Object.entries(project).map(([projectKey, projectValue]) => {
-                              if (projectKey === 'name') {
-                                return (
-                                  <Typography key={projectKey} variant="body2" fontWeight="bold" sx={{ mb: 1 }}>
-                                    {projectValue as string}
-                                  </Typography>
-                                );
-                              }
-                              
-                              // Simple string fields in project
-                              if (typeof projectValue === 'string') {
-                                return (
-                                  <Typography key={projectKey} variant="body2" component="div" sx={{ mb: 1 }}>
-                                    <strong>{projectKey.charAt(0).toUpperCase() + projectKey.slice(1).replace(/_/g, ' ')}:</strong>{' '}
-                                    {projectValue}
-                                  </Typography>
-                                );
-                              }
-                              
-                              // String array fields in project
-                              if (Array.isArray(projectValue) && typeof projectValue[0] === 'string') {
-                                return (
-                                  <Box key={projectKey} sx={{ mb: 1 }}>
-                                    <Typography variant="body2" fontWeight="bold" sx={{ mb: 0.5 }}>
-                                      {projectKey.charAt(0).toUpperCase() + projectKey.slice(1).replace(/_/g, ' ')}:
-                                    </Typography>
-                                    <Box component="ul" sx={{ pl: 2, mt: 0, mb: 0 }}>
-                                      {(projectValue as string[]).map((item: string, j: number) => (
-                                        <Typography key={j} component="li" variant="body2" sx={{ mb: 0.5 }}>
-                                          {item}
-                                        </Typography>
-                                      ))}
-                                    </Box>
-                                  </Box>
-                                );
-                              }
-                              
-                              return (
-                                <Typography key={projectKey} variant="body2" component="div" sx={{ mb: 1 }}>
-                                  <strong>{projectKey.charAt(0).toUpperCase() + projectKey.slice(1).replace(/_/g, ' ')}:</strong>{' '}
-                                  {String(projectValue)}
-                                </Typography>
-                              );
-                            })}
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-                  );
-                }
-                
-                return (
-                  <Typography key={key} variant="body2" component="div" sx={{ mb: 1 }}>
-                    <strong>{key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:</strong> {String(value)}
-                  </Typography>
-                );
-              })}
-          </Box>
-        }
-      />
-    </ListItem>
-  );
-};
-
-const SortableList: React.FC<SortableListProps> = ({ items, sectionKey, onReorder }) => {
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    if (over && active.id !== over.id) {
-      const oldIndex = items.findIndex(item => `${sectionKey}-item-${item.id || items.indexOf(item)}` === active.id);
-      const newIndex = items.findIndex(item => `${sectionKey}-item-${item.id || items.indexOf(item)}` === over.id);
-      
-      const newItems = arrayMove(items, oldIndex, newIndex);
-      onReorder(newItems);
-    }
-  };
-
-  return (
-    <DndContext 
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext 
-        items={items.map((item, index) => `${sectionKey}-item-${item.id || index}`)}
-        strategy={verticalListSortingStrategy}
-      >
-        <List sx={{ ml: 3 }}>
-          {items.map((item, index) => (
-            <SortableItem
-              key={`${sectionKey}-item-${item.id || index}`}
-              id={`${sectionKey}-item-${item.id || index}`}
-              item={item}
-              index={index}
-              sectionKey={sectionKey}
-              isLast={index === items.length - 1}
-            />
-          ))}
-        </List>
-      </SortableContext>
-    </DndContext>
-  );
-};
-
-const SortableSection: React.FC<SortableSectionProps> = ({ 
-  id, 
-  section, 
-  resumeData, 
-  editMode, 
-  handleEdit, 
-  handleSave, 
-  renderSectionEditor 
-}) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    marginBottom: '1rem',
-    zIndex: isDragging ? 1 : 'auto'
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <Card>
-        <CardHeader
-          title={
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <div {...listeners} style={{ cursor: 'grab', marginRight: '8px' }}>
-                <DragIndicatorIcon sx={{ color: 'text.secondary' }} />
-              </div>
-              {section.charAt(0).toUpperCase() + section.slice(1).replace(/_/g, ' ')}
-            </Box>
-          }
-          action={
-            <IconButton 
-              onClick={() => editMode[section] ? handleSave(section) : handleEdit(section)}
-            >
-              {editMode[section] ? <CheckIcon /> : <EditIcon />}
-            </IconButton>
-          }
-        />
-        <Divider />
-        <CardContent>
-          {resumeData && resumeData[section] && renderSectionEditor(section, '')}
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
 
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => {
   const [loading, setLoading] = useState(true);
@@ -352,6 +63,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [fileName, setFileName] = useState('');
   const [score, setScore] = useState(0);
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [editMode, setEditMode] = useState<{[key: string]: boolean}>({});
   const [editValues, setEditValues] = useState<{[key: string]: any}>({});
   const [sectionOrder, setSectionOrder] = useState<string[]>([
@@ -400,6 +112,9 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
                 content[key] && key !== 'raw_text' && typeof content[key] === 'object'
               ));
               setFileName(resume.filename || '');
+              
+              // After parsing, get or create analysis
+              await fetchOrCreateAnalysis(resumeId);
             } else {
               setError('Failed to parse resume');
             }
@@ -411,10 +126,10 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
               content[key] && key !== 'raw_text' && typeof content[key] === 'object'
             ));
             setFileName(resume.filename || '');
+            
+            // Get or create analysis
+            await fetchOrCreateAnalysis(resumeId);
           }
-          
-          // Simulate a score for demonstration purposes
-          setScore(Math.floor(Math.random() * 30) + 70); // Random score between 70-99
         } else {
           setError('Failed to fetch resume data');
         }
@@ -430,6 +145,41 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
       fetchResumeData();
     }
   }, [resumeId]);
+
+  // 添加函数来获取或创建简历分析
+  const fetchOrCreateAnalysis = async (resumeId: string) => {
+    try {
+      // First try to get existing analysis
+      const analysisResponse = await resumeApi.getAnalysis(resumeId);
+      
+      if (analysisResponse.data.status === 'success' && 
+          analysisResponse.data.data && 
+          analysisResponse.data.data.analysis) {
+        // Use existing analysis
+        setAnalysisData(analysisResponse.data.data.analysis);
+        setScore(analysisResponse.data.data.analysis.overall_score || 0);
+        console.log("Successfully loaded analysis data:", analysisResponse.data.data.analysis);
+      } else {
+        // If no analysis exists, create one
+        const createAnalysisResponse = await resumeApi.analyzeResume(resumeId);
+        
+        if (createAnalysisResponse.data.status === 'success' && createAnalysisResponse.data.data) {
+          const analysis = createAnalysisResponse.data.data.analysis;
+          setAnalysisData(analysis);
+          setScore(analysis.overall_score || 0);
+          console.log("Successfully created analysis data:", analysis);
+        } else {
+          console.error('Failed to create analysis', createAnalysisResponse);
+          // Fallback to a default score in case of error
+          setScore(70);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching/creating analysis:', error);
+      // Fallback to a default score in case of error
+      setScore(70);
+    }
+  };
 
   const handleEdit = (section: string) => {
     setEditMode({ ...editMode, [section]: true });
@@ -454,6 +204,16 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
     try {
       await resumeApi.updateResumeContent(resumeId, updatedData);
       console.log(`${section} section updated successfully`);
+      
+      // Re-analyze the resume after content changes
+      if (resumeId) {
+        const analyzeResponse = await resumeApi.analyzeResume(resumeId);
+        if (analyzeResponse.data.status === 'success') {
+          const analysis = analyzeResponse.data.data.analysis;
+          setAnalysisData(analysis);
+          setScore(analysis.overall_score || 0);
+        }
+      }
     } catch (error) {
       console.error(`Error updating ${section} section:`, error);
       // Consider adding error notification here
@@ -477,7 +237,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
     });
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = (event: any) => {
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -537,11 +297,16 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
       // If request is successful
       if (response.data && response.data.status === 'success') {
         const optimizedContent = response.data.data.optimizedContent;
+        console.log('原始内容:', currentContent);
+        console.log('优化后内容:', optimizedContent);
         
         // Update edit values
         if (!resumeData) return;
         
         const sectionData = resumeData[sectionKey];
+        
+        // 创建resumeData的深拷贝，用于更新
+        const updatedResumeData = JSON.parse(JSON.stringify(resumeData));
         
         if (typeof sectionData === 'string') {
           // Update string field
@@ -549,6 +314,9 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
             ...editValues,
             [sectionKey]: optimizedContent
           });
+          
+          // 直接更新resumeData
+          updatedResumeData[sectionKey] = optimizedContent;
         } else if (Array.isArray(sectionData)) {
           // Update array field
           if (bulletIndex !== undefined && itemIndex !== undefined) {
@@ -557,14 +325,74 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
             const item = newArray[itemIndex];
             
             if (nestedSection && nestedItemIndex !== undefined) {
-              // Update bullet point in nested project
-              const nestedItems = [...(item[nestedSection] as any[])];
-              const nestedItem = nestedItems[nestedItemIndex];
-              const bullets = [...(nestedItem[bulletIndex] as string[])];
-              bullets[bulletIndex] = optimizedContent;
-              
-              nestedItems[nestedItemIndex] = { ...nestedItem, [bulletIndex]: bullets };
-              newArray[itemIndex] = { ...item, [nestedSection]: nestedItems };
+              try {
+                const nestedItems = [...(item[nestedSection] as any[])];
+                const nestedItem = nestedItems[nestedItemIndex];
+                
+                // 找到嵌套项目中包含字符串数组的字段
+                const bulletArrayField = Object.keys(nestedItem).find(key => 
+                  Array.isArray(nestedItem[key]) && 
+                  nestedItem[key].length > 0 && 
+                  typeof nestedItem[key][0] === 'string'
+                );
+                
+                if (bulletArrayField) {
+                  // 现在我们找到了正确的字段，更新该字段中的特定项
+                  const newBullets = [...nestedItem[bulletArrayField]];
+                  newBullets[bulletIndex] = optimizedContent;
+                  
+                  // 更新嵌套对象
+                  nestedItems[nestedItemIndex] = { 
+                    ...nestedItem, 
+                    [bulletArrayField]: newBullets 
+                  };
+                  newArray[itemIndex] = { ...item, [nestedSection]: nestedItems };
+                  
+                  // 更新resumeData中的嵌套项目
+                  const updatedArray = [...updatedResumeData[sectionKey]];
+                  const updatedItem = {...updatedArray[itemIndex]};
+                  const updatedNestedItems = [...updatedItem[nestedSection]];
+                  const updatedNestedItem = {...updatedNestedItems[nestedItemIndex]};
+                  const updatedBullets = [...updatedNestedItem[bulletArrayField]];
+                  updatedBullets[bulletIndex] = optimizedContent;
+                  
+                  updatedNestedItem[bulletArrayField] = updatedBullets;
+                  updatedNestedItems[nestedItemIndex] = updatedNestedItem;
+                  updatedItem[nestedSection] = updatedNestedItems;
+                  updatedArray[itemIndex] = updatedItem;
+                  updatedResumeData[sectionKey] = updatedArray;
+                } else {
+                  // 如果找不到字符串数组字段，可能是直接更新字段值
+                  console.log('嵌套项目结构:', nestedItem);
+                  
+                  // 尝试找到与currentContent匹配的字段
+                  const matchingField = Object.keys(nestedItem).find(key => 
+                    nestedItem[key] === currentContent
+                  );
+                  
+                  if (matchingField) {
+                    nestedItems[nestedItemIndex] = { 
+                      ...nestedItem, 
+                      [matchingField]: optimizedContent 
+                    };
+                    newArray[itemIndex] = { ...item, [nestedSection]: nestedItems };
+                    
+                    // 更新resumeData
+                    const updatedArray = [...updatedResumeData[sectionKey]];
+                    const updatedItem = {...updatedArray[itemIndex]};
+                    const updatedNestedItems = [...updatedItem[nestedSection]];
+                    updatedNestedItems[nestedItemIndex] = { 
+                      ...updatedNestedItems[nestedItemIndex], 
+                      [matchingField]: optimizedContent 
+                    };
+                    updatedItem[nestedSection] = updatedNestedItems;
+                    updatedArray[itemIndex] = updatedItem;
+                    updatedResumeData[sectionKey] = updatedArray;
+                  }
+                }
+              } catch (err) {
+                console.error('嵌套项目处理错误:', err);
+              }
             } else {
               // Update regular bullet point
               const key = Object.keys(item).find(k => 
@@ -576,11 +404,46 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
                 const newBullets = [...(item[key] as string[])];
                 newBullets[bulletIndex] = optimizedContent;
                 newArray[itemIndex] = { ...item, [key]: newBullets };
+                
+                // 更新resumeData中的常规bullet point
+                const updatedArray = [...updatedResumeData[sectionKey]];
+                const updatedItem = {...updatedArray[itemIndex]};
+                const updatedBullets = [...updatedItem[key]];
+                updatedBullets[bulletIndex] = optimizedContent;
+                updatedItem[key] = updatedBullets;
+                updatedArray[itemIndex] = updatedItem;
+                updatedResumeData[sectionKey] = updatedArray;
               }
             }
             
             setEditValues({ ...editValues, [sectionKey]: newArray });
+          } else if (itemIndex !== undefined) {
+            // 处理单个字段优化的情况 (例如职位名称、公司名等)
+            const key = Object.keys(editValues[sectionKey][itemIndex]).find(k => 
+              editValues[sectionKey][itemIndex][k] === currentContent
+            );
+            
+            if (key) {
+              const newArray = [...editValues[sectionKey]];
+              newArray[itemIndex] = { ...newArray[itemIndex], [key]: optimizedContent };
+              setEditValues({ ...editValues, [sectionKey]: newArray });
+              
+              // 更新resumeData
+              const updatedArray = [...updatedResumeData[sectionKey]];
+              updatedArray[itemIndex] = { ...updatedArray[itemIndex], [key]: optimizedContent };
+              updatedResumeData[sectionKey] = updatedArray;
+            }
           }
+        }
+        
+        // 更新UI显示
+        setResumeData(updatedResumeData);
+        
+        // 保存到后端
+        try {
+          resumeApi.updateResumeContent(resumeId, updatedResumeData);
+        } catch (error) {
+          console.error('Error updating content after optimization:', error);
         }
         
         // Show success message
@@ -627,18 +490,11 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
               value={editValues[section] || ''}
               onChange={(e) => handleTextChange(section, e.target.value)}
             />
-            <IconButton 
-              color="primary"
+            <OptimizeButton 
               onClick={() => handleOptimizeContent(section, editValues[section] || '')}
-              disabled={isOptimizing[section]}
+              isOptimizing={!!isOptimizing[section]}
               sx={{ ml: 1 }}
-            >
-              {isOptimizing[section] ? (
-                <CircularProgress size={24} />
-              ) : (
-                <AutoFixHighIcon />
-              )}
-            </IconButton>
+            />
           </Box>
           <Typography variant="caption" color="text.secondary">
             Tip: Click the magic wand to optimize this content with AI
@@ -1041,87 +897,126 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
 
   const renderScoreCard = () => {
     return (
-      <Card sx={{ mb: 3 }}>
-        <CardHeader title="Resume Score" />
-        <Divider />
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
-            <Box 
-              sx={{ 
-                position: 'relative', 
-                display: 'inline-flex',
-                width: 120,
-                height: 120
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Resume Score
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+          <Box 
+            sx={{ 
+              position: 'relative', 
+              display: 'inline-flex',
+              width: 120,
+              height: 120
+            }}
+          >
+            <CircularProgress 
+              variant="determinate" 
+              value={score} 
+              size={120} 
+              thickness={5} 
+              sx={{ color: score > 80 ? 'success.main' : score > 60 ? 'warning.main' : 'error.main' }}
+            />
+            <Box
+              sx={{
+                top: 0,
+                left: 0,
+                bottom: 0,
+                right: 0,
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <CircularProgress 
-                variant="determinate" 
-                value={score} 
-                size={120} 
-                thickness={5} 
-                sx={{ color: score > 80 ? 'success.main' : score > 60 ? 'warning.main' : 'error.main' }}
-              />
-              <Box
-                sx={{
-                  top: 0,
-                  left: 0,
-                  bottom: 0,
-                  right: 0,
-                  position: 'absolute',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Typography variant="h4" component="div" color="text.secondary">
-                  {score}
-                </Typography>
-              </Box>
+              <Typography variant="h4" component="div" color="text.secondary">
+                {score}
+              </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              out of 100
-            </Typography>
           </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            out of 100
+          </Typography>
+        </Box>
 
-          <Typography variant="h6" sx={{ mt: 3 }}>Improvement Areas</Typography>
-          <List dense>
-            <ListItem>
-              <ListItemText primary="Skills Matching" secondary="90%" />
-            </ListItem>
-            <ListItem>
-              <ListItemText primary="ATS Compatibility" secondary="80%" />
-            </ListItem>
-            <ListItem>
-              <ListItemText primary="Impact Statements" secondary="85%" />
-            </ListItem>
-          </List>
-        </CardContent>
-      </Card>
+        <Typography variant="h6" sx={{ mt: 3 }}>Improvement Areas</Typography>
+        <List dense>
+          {analysisData ? (
+            <>
+              <ListItem>
+                <ListItemText 
+                  primary="Technical Skills" 
+                  secondary={`${analysisData.technical_score || 0}%`} 
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemText 
+                  primary="ATS Compatibility" 
+                  secondary={`${analysisData.ats_compatibility_score || 0}%`} 
+                />
+              </ListItem>
+              <ListItem>
+                <ListItemText 
+                  primary="Communication" 
+                  secondary={`${analysisData.communication_score || 0}%`} 
+                />
+              </ListItem>
+              {analysisData.areas_for_improvement && analysisData.areas_for_improvement.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Suggestions:</Typography>
+                  <List dense>
+                    {analysisData.areas_for_improvement.slice(0, 3).map((area: string, index: number) => (
+                      <ListItem key={index} sx={{ py: 0 }}>
+                        <ListItemText 
+                          primary={<Typography variant="body2">{area}</Typography>}
+                          sx={{ m: 0 }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+            </>
+          ) : (
+            // Fallback for when analysis data is not available
+            <>
+              <ListItem>
+                <ListItemText primary="Skills Matching" secondary="Loading..." />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="ATS Compatibility" secondary="Loading..." />
+              </ListItem>
+              <ListItem>
+                <ListItemText primary="Impact Statements" secondary="Loading..." />
+              </ListItem>
+            </>
+          )}
+        </List>
+      </Paper>
     );
   };
 
   const renderJobTargetOptimization = () => {
     return (
-      <Card>
-        <CardHeader title="Job Target Optimization" />
-        <Divider />
-        <CardContent>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            Enter your target job title to get customized suggestions for AI optimization
-          </Typography>
-          <TextField
-            fullWidth
-            placeholder="e.g. Software Engineer"
-            variant="outlined"
-            value={targetJobTitle}
-            onChange={(e) => setTargetJobTitle(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <Typography variant="caption" color="text.secondary" paragraph>
-            Adding a job title will help the AI tailor content to industry standards
-          </Typography>
-        </CardContent>
-      </Card>
+      <Paper>
+        <Typography variant="h6" gutterBottom>
+          Job Target Optimization
+        </Typography>
+        <Typography variant="body2" color="text.secondary" paragraph>
+          Enter your target job title to get customized suggestions for AI optimization
+        </Typography>
+        <TextField
+          fullWidth
+          placeholder="e.g. Software Engineer"
+          variant="outlined"
+          value={targetJobTitle}
+          onChange={(e) => setTargetJobTitle(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+        <Typography variant="caption" color="text.secondary" paragraph>
+          Adding a job title will help the AI tailor content to industry standards
+        </Typography>
+      </Paper>
     );
   };
 
@@ -1221,8 +1116,11 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           </Box>
           
           <Box sx={{ width: { xs: '100%', md: '33.333%' } }}>
-            {renderScoreCard()}
-            {renderJobTargetOptimization()}
+            <ResumeScoreCard score={score} analysisData={analysisData} />
+            <JobTargetCard 
+              targetJobTitle={targetJobTitle} 
+              onChange={setTargetJobTitle} 
+            />
           </Box>
         </Stack>
       ) : (
