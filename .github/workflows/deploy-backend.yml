@@ -22,6 +22,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Create .env file
+        run: |
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
