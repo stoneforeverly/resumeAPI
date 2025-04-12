@@ -7,9 +7,9 @@ on:
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: resume_backend-repo
-  DOCKER_COMPOSE_FILE: docker-compose.yml # compose 文件路径
+  DOCKER_COMPOSE_FILE: docker-compose.yml
   IMAGE_TAG: ${{ github.sha }}
-  KEEP_LAST_IMAGES: 5  # 保留最近5个镜像
+  KEEP_LAST_IMAGES: 5
 
 jobs:
   build-and-push:
@@ -24,7 +24,7 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" > .env  # 使用 > 覆盖而非 >> 追加，避免重复
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -38,42 +38,41 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Frontend
-        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-frontend
-          docker tag resumeapi-frontend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-frontend-${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-frontend-${{ github.sha }}
+          # 构建镜像并指定标签
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend  # 服务名需与 compose 文件一致
+          # 获取生成的镜像名称（根据 compose 配置）
+          FRONTEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ env.IMAGE_TAG }}"
+          docker tag frontend:latest $FRONTEND_IMAGE
+          docker push $FRONTEND_IMAGE
 
       - name: Build and Push Backend
-        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-backend
-          docker tag resumeapi-backend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-backend-${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-backend-${{ github.sha }}
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
+          BACKEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}"
+          docker tag backend:latest $BACKEND_IMAGE
+          docker push $BACKEND_IMAGE
 
-      - name: Cleanup old old images
+      - name: Cleanup old images
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          REPO=$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}
+          REPO_NAME=${{ env.ECR_REPOSITORY }}
           
-          # 获取所有镜像并按推送时间排序
-          IMAGES=$(aws ecr describe-images --repository-name ${{ env.ECR_REPOSITORY }} \
-                  --query 'sort_by(imageDetails,& imagePushedAt)[*].imageTags[0]' \
-                  --output json | jq -r '.[]' | grep -v "latest")
+          # 获取所有镜像并按推送时间排序（排除 latest 标签）
+          IMAGE_TAGS=$(aws ecr describe-images --repository-name $REPO_NAME \
+            --query 'sort_by(imageDetails, &imagePushedAt)[*].imageTags' \
+            --output text | tr '\t' '\n' | grep -v "latest" | sort -u)
           
-          # 计算需要删除的镜像数量
-          TOTAL_IMAGES=$(echo "$IMAGES" | wc -l)
+          TOTAL_IMAGES=$(echo "$IMAGE_TAGS" | wc -l)
           IMAGES_TO_DELETE=$((TOTAL_IMAGES - ${{ env.KEEP_LAST_IMAGES }}))
           
           if [ $IMAGES_TO_DELETE -gt 0 ]; then
-            echo "Will delete $IMAGES_TO_DELETE old images"
-            OLD_IMAGES=$(echo "$IMAGES" | head -n $IMAGES_TO_DELETE)
-            
-            for IMAGE in $OLD_IMAGES; do
-              echo "Deleting $IMAGE"
+            echo "Deleting $IMAGES_TO_DELETE old images"
+            OLD_TAGS=$(echo "$IMAGE_TAGS" | head -n $IMAGES_TO_DELETE)
+            for TAG in $OLD_TAGS; do
               aws ecr batch-delete-image \
-                --repository-name ${{ env.ECR_REPOSITORY }} \
-                --image-ids imageTag=$IMAGE
+                --repository-name $REPO_NAME \
+                --image-ids imageTag=$TAG
             done
           else
             echo "No images to delete"
