@@ -786,6 +786,26 @@ def optimize_resume_content(resume_id):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/v1/resumes/<resume_id>', methods=['DELETE'])
+def delete_resume(resume_id):
+    """Delete a specific resume by ID"""
+    try:
+        # Handle ObjectId based on MongoDB availability
+        if mongodb_available:
+            result = db.delete_resume(ObjectId(resume_id))
+        else:
+            result = db.delete_resume(resume_id)
+            
+        if result:
+            return jsonify({
+                'status': 'success',
+                'message': 'Resume deleted successfully'
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'Resume not found or could not be deleted'}), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if __name__ == '__main__':
     # Use port 8080 instead of 5000 which is used by AirPlay on Mac
     port = int(os.environ.get("PORT", 8080))

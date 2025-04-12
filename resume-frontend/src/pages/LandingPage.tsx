@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   Box,
@@ -16,6 +16,7 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
@@ -73,6 +74,7 @@ const ButtonGroup = styled(Box)(({ theme }) => ({
 
 const LandingPage: React.FC = () => {
   const theme = useTheme();
+  const location = useLocation();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
@@ -92,6 +94,17 @@ const LandingPage: React.FC = () => {
     'Edit & Optimize',
     'Download'
   ];
+  
+  // 检查location state中是否有resumeId，如果有则直接跳转到分析页面
+  useEffect(() => {
+    if (location.state && location.state.resumeId) {
+      const id = location.state.resumeId;
+      console.log('Loading resume from state:', id);
+      setResumeId(id);
+      setActiveStep(1);
+      setIsAnalyzing(false);
+    }
+  }, [location.state]);
   
   const handleUploadSuccess = (id: string) => {
     console.log('Resume uploaded successfully with ID:', id);

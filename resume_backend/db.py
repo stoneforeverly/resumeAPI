@@ -237,4 +237,29 @@ def get_resumes_by_user(user_id):
             return resumes.find({"user_id": user_id})
     except Exception as e:
         print(f"Error getting resumes by user: {e}")
-        return [] 
+        return []
+
+def delete_resume(resume_id):
+    """Delete a resume by ID and its associated analysis"""
+    global analyses, resumes  # 同时声明两个全局变量
+    
+    try:
+        # First delete associated analysis
+        if mongodb_available:
+            analyses.delete_one({"resume_id": resume_id})
+        else:
+            # 对于内存存储，更新全局变量analyses
+            analyses = [a for a in analyses if a.get("resume_id") != resume_id]
+        
+        # Then delete the resume
+        if mongodb_available:
+            result = resumes.delete_one({"_id": resume_id})
+            return result.deleted_count > 0
+        else:
+            # For in-memory storage
+            original_len = len(resumes)
+            resumes = [r for r in resumes if r.get("_id") != resume_id]
+            return len(resumes) < original_len
+    except Exception as e:
+        print(f"Error deleting resume: {e}")
+        return False 
