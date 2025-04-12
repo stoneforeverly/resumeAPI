@@ -40,16 +40,16 @@ jobs:
       - name: Build and Push Frontend
         # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend
-          docker tag frontend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ github.sha }}
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-frontend
+          docker tag resumeapi-frontend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-frontend-${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-frontend-${{ github.sha }}
 
       - name: Build and Push Backend
         # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
-          docker tag backend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ github.sha }}
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-backend
+          docker tag resumeapi-backend:latest ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-backend-${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:resumeapi-backend-${{ github.sha }}
 
       - name: Cleanup old old images
         run: |
