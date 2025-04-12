@@ -40,7 +40,7 @@ jobs:
       - name: Build and Push Frontend
         run: |
           # 构建镜像并指定标签
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-frontend  # 服务名需与 compose 文件一致
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend  # 服务名需与 compose 文件一致
           # 获取生成的镜像名称（根据 compose 配置）
           FRONTEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ env.IMAGE_TAG }}"
           docker tag frontend:latest $FRONTEND_IMAGE
@@ -48,7 +48,7 @@ jobs:
 
       - name: Build and Push Backend
         run: |
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build resumeapi-backend
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
           BACKEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}"
           docker tag backend:latest $BACKEND_IMAGE
           docker push $BACKEND_IMAGE
