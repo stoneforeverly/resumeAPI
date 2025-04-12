@@ -43,14 +43,14 @@ jobs:
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend  # 服务名需与 compose 文件一致
           # 获取生成的镜像名称（根据 compose 配置）
           FRONTEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ env.IMAGE_TAG }}"
-          docker tag frontend:latest $FRONTEND_IMAGE
+          docker tag myproject-frontend:latest $FRONTEND_IMAGE
           docker push $FRONTEND_IMAGE
 
       - name: Build and Push Backend
         run: |
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
           BACKEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}"
-          docker tag backend:latest $BACKEND_IMAGE
+          docker tag myproject-backend:latest $BACKEND_IMAGE
           docker push $BACKEND_IMAGE
 
       - name: Cleanup old images
