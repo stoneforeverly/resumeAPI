@@ -11,3 +11,32 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* 打印样式 */
+@media print {
+  /* 隐藏所有页面元素 */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 只显示简历预览部分 */
+  .MuiPaper-root.resume-preview, 
+  .MuiPaper-root.resume-preview * {
+    visibility: visible;
+  }
+
+  /* 确保预览区域铺满打印页面 */
+  .MuiPaper-root.resume-preview {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* 隐藏不需要的元素 */
+  .MuiPaper-root.resume-preview .print-hide {
+    display: none !important;
+  }
+}

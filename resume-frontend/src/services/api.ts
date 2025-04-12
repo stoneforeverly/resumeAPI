@@ -64,6 +64,19 @@ export const resumeApi = {
       responseType: 'blob',
     });
   },
+  
+  // AI优化简历内容（section或bullet point）
+  optimizeContent: async (resumeId: string, data: {
+    sectionKey: string;
+    itemIndex?: number;
+    bulletIndex?: number;
+    nestedSection?: string;
+    nestedItemIndex?: number;
+    currentContent: string;
+    jobTitle?: string;
+  }) => {
+    return api.post(`/resumes/${resumeId}/optimize-content`, data);
+  },
 };
 
 // Auth API functions

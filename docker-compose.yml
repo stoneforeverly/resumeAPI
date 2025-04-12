@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # 后端服务
+  backend:
+    build:
+      context: ./resume_backend
+      dockerfile: Dockerfile
+    container_name: resume-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./resume_backend/uploads:/app/uploads
+    env_file:
+      - ./resume_backend/.env
+    environment:
+      - PORT=8080
+      - FLASK_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./resume-frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:8080/api/v1
+    container_name: resume-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+# 定义网络
+networks:
+  default:
+    name: resume-network

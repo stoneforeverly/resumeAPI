@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import json
 from flasgger import Swagger, swag_from
 from flask_cors import CORS  # 导入CORS
+from datetime import datetime
 
 # 导入Swagger配置
 from swagger_config import swagger_config, swagger_template
@@ -399,13 +400,14 @@ def get_job_suggestions(resume_id):
 @app.route('/api/v1/health', methods=['GET'])
 @swag_from(health_check_docs)
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint for container monitoring"""
     return jsonify({
-        'status': 'success',
-        'data': {
-            'service': 'Resume API',
-            'status': 'healthy',
-            'version': '1.0.0'
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '1.0.0',
+        'services': {
+            'database': 'ok' if mongodb_available else 'using local storage',
+            'openai': 'ok' if openai_client else 'unavailable'
         }
     })
 
@@ -695,6 +697,91 @@ def download_resume_api(resume_id):
             download_name=f"optimized_{resume['filename']}",
             mimetype='application/pdf'
         )
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Add new API endpoint to optimize specific resume content
+@app.route('/api/v1/resumes/<resume_id>/optimize-content', methods=['POST'])
+def optimize_resume_content(resume_id):
+    """Optimize specific resume content (section or bullet point) using AI"""
+    try:
+        # 获取请求数据
+        data = request.json
+        if not data:
+            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+            
+        required_fields = ['sectionKey', 'currentContent']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'status': 'error', 'message': f'Missing required field: {field}'}), 400
+        
+        # 提取优化所需信息
+        section_key = data['sectionKey']
+        current_content = data['currentContent']
+        job_title = data.get('jobTitle', '')
+        
+        # 构建提示词
+        prompt_context = f"Job Target: {job_title}\n" if job_title else ""
+        
+        if 'itemIndex' in data and data['itemIndex'] is not None:
+            context = f"This is a bullet point in the {section_key} section of a resume."
+        else:
+            context = f"This is the {section_key} section of a resume."
+        
+        # 检查OpenAI客户端是否可用
+        if openai_client:
+            try:
+                # 使用OpenAI生成优化内容
+                response = openai_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are an expert resume writer with years of experience helping job seekers create compelling, ATS-friendly resumes. You excel at turning basic content into powerful, achievement-focused bullets that emphasize results and skills."},
+                        {"role": "user", "content": f"""
+                        {prompt_context}
+                        {context}
+                        
+                        Original content:
+                        "{current_content}"
+                        
+                        Please optimize this content to make it more impactful, professional, and ATS-friendly. Focus on:
+                        1. Using strong action verbs
+                        2. Quantifying achievements when possible
+                        3. Highlighting relevant skills
+                        4. Maintaining conciseness and clarity
+                        5. Making it keyword-rich for ATS systems
+                        
+                        Provide only the optimized content as your response, with no additional explanations.
+                        """}
+                    ],
+                    temperature=0.3,
+                )
+                
+                # 获取优化后的内容
+                optimized_content = response.choices[0].message.content.strip()
+                
+                # 移除可能的引号
+                if optimized_content.startswith('"') and optimized_content.endswith('"'):
+                    optimized_content = optimized_content[1:-1]
+                
+                return jsonify({
+                    'status': 'success',
+                    'data': {
+                        'originalContent': current_content,
+                        'optimizedContent': optimized_content
+                    }
+                })
+                
+            except Exception as openai_error:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'OpenAI API error: {str(openai_error)}'
+                }), 500
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'OpenAI client not available'
+            }), 500
             
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500

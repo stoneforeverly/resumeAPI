@@ -19,6 +19,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import LoginIcon from '@mui/icons-material/Login';
+import GoogleLoginButton from '../Auth/GoogleLoginButton';
 
 const Header: React.FC = () => {
   const theme = useTheme();
@@ -161,24 +162,10 @@ const Header: React.FC = () => {
                 </Box>
               </>
             ) : (
-              <Button 
-                color="primary" 
+              <GoogleLoginButton 
                 variant="outlined"
-                startIcon={<LoginIcon />}
-                sx={{ 
-                  borderRadius: '50px',
-                  textTransform: 'none',
-                  px: 2,
-                  py: 0.5,
-                  fontWeight: 500,
-                  borderWidth: 1.5,
-                  '&:hover': {
-                    borderWidth: 1.5,
-                  }
-                }}
-              >
-                Login
-              </Button>
+                size="medium"
+              />
             )}
           </Box>
         </Toolbar>
@@ -231,15 +218,10 @@ const Header: React.FC = () => {
               </Box>
             ) : (
               <Box sx={{ p: 2 }}>
-                <Button 
-                  fullWidth 
-                  variant="contained" 
-                  color="primary"
-                  startIcon={<LoginIcon />}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Login
-                </Button>
+                <GoogleLoginButton
+                  fullWidth
+                  variant="contained"
+                />
               </Box>
             )}
           </Container>
