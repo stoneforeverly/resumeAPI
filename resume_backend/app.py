@@ -26,6 +26,9 @@ from swagger_docs import (
     health_check_docs
 )
 
+# 导入PDF生成器
+from resume_pdf_generator import pdf_generator
+
 # Load environment variables
 load_dotenv()
 
@@ -669,36 +672,56 @@ def update_resume_content_api(resume_id):
 def download_resume_api(resume_id):
     """Download the optimized resume as PDF"""
     try:
+        print(f"Downloading resume with ID: {resume_id}")
+        
         # Convert resume_id to ObjectId if using MongoDB
         if mongodb_available:
             try:
                 resume_id = ObjectId(resume_id)
-            except:
+                print(f"Converted to ObjectId: {resume_id}")
+            except Exception as e:
+                print(f"Error converting to ObjectId: {e}")
                 pass
                 
         # Get the resume
         resume = db.get_resume(resume_id)
         if not resume:
+            print(f"Resume not found in database: {resume_id}")
             return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
             
-        # For now, we'll return the original PDF
-        # In a real implementation, you would generate a new PDF with the updated content
-        if 'filepath' in resume:
-            filepath = resume['filepath']
+        print(f"Resume found in database: {resume}")
+            
+        # Get the file path
+        if 'filepath' in resume and resume['filepath']:
+            # If filepath is relative, make it absolute
+            if not os.path.isabs(resume['filepath']):
+                filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), resume['filepath'])
+            else:
+                filepath = resume['filepath']
+            print(f"Using filepath from database: {filepath}")
         else:
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), app.config['UPLOAD_FOLDER'], resume['filename'])
+            print(f"Using constructed filepath: {filepath}")
             
         if not os.path.exists(filepath):
+            print(f"File not found at path: {filepath}")
             return jsonify({'status': 'error', 'message': 'Resume file not found'}), 404
             
-        return send_file(
-            filepath,
-            as_attachment=True,
-            download_name=f"optimized_{resume['filename']}",
-            mimetype='application/pdf'
-        )
+        print(f"File exists at path: {filepath}")
+        
+        try:
+            return send_file(
+                filepath,
+                as_attachment=True,
+                download_name=f"optimized_{resume['filename']}",
+                mimetype='application/pdf'
+            )
+        except Exception as e:
+            print(f"Error sending file: {e}")
+            return jsonify({'status': 'error', 'message': f'Error sending file: {str(e)}'}), 500
             
     except Exception as e:
+        print(f"Unexpected error in download_resume_api: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Add new API endpoint to optimize specific resume content
@@ -804,6 +827,57 @@ def delete_resume(resume_id):
         else:
             return jsonify({'status': 'error', 'message': 'Resume not found or could not be deleted'}), 404
     except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# 添加新API端点来生成自定义简历PDF
+@app.route('/api/v1/resumes/<resume_id>/generate-pdf', methods=['GET'])
+def generate_resume_pdf(resume_id):
+    """Generate a custom formatted PDF resume"""
+    try:
+        print(f"Generating PDF for resume with ID: {resume_id}")
+        
+        # 转换ID格式（如果使用MongoDB）
+        if mongodb_available:
+            try:
+                resume_id = ObjectId(resume_id)
+                print(f"Converted to ObjectId: {resume_id}")
+            except Exception as e:
+                print(f"Error converting to ObjectId: {e}")
+                pass
+                
+        # 获取简历数据
+        resume = db.get_resume(resume_id)
+        if not resume:
+            print(f"Resume not found in database: {resume_id}")
+            return jsonify({'status': 'error', 'message': 'Resume not found'}), 404
+            
+        print(f"Resume found in database: {resume}")
+        
+        # 确保内容已解析
+        if not resume.get('content'):
+            print(f"Resume content not parsed: {resume_id}")
+            return jsonify({'status': 'error', 'message': 'Resume content not parsed'}), 400
+            
+        # 使用PDF生成器生成PDF
+        try:
+            output_filename = f"resume_{str(resume_id)}.pdf"
+            pdf_path = pdf_generator.generate(resume['content'], output_filename)
+            
+            print(f"PDF generated successfully at: {pdf_path}")
+            
+            # 返回生成的PDF
+            return send_file(
+                pdf_path,
+                as_attachment=True,
+                download_name=f"resume_{str(resume_id)}.pdf",
+                mimetype='application/pdf'
+            )
+        except Exception as e:
+            print(f"Error generating PDF: {e}")
+            return jsonify({'status': 'error', 'message': f'Error generating PDF: {str(e)}'}), 500
+            
+    except Exception as e:
+        print(f"Unexpected error in generate_resume_pdf: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':

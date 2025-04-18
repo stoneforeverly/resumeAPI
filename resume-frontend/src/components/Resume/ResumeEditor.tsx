@@ -14,7 +14,19 @@ import {
   Alert,
   List,
   ListItem,
-  ListItemText
+  ListItemText,
+  styled,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Fab,
+  Tooltip,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  FormControlLabel,
+  Radio
 } from '@mui/material';
 import {
   DndContext,
@@ -36,6 +48,8 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import WorkIcon from '@mui/icons-material/Work';
+import AddIcon from '@mui/icons-material/Add';
 
 // 导入API服务
 import { resumeApi } from '../../services/api';
@@ -48,6 +62,8 @@ import ResumeScoreCard from './ResumeScoreCard';
 import JobTargetCard from './JobTargetCard';
 import OptimizeButton from './OptimizeButton';
 import ResumePreview from './ResumePreview';
+import StringFieldEditor from './StringFieldEditor';
+import ArrayFieldEditor from './ArrayFieldEditor';
 
 // 导入类型
 import { ResumeData, AnalysisData } from './utils/types';
@@ -55,6 +71,44 @@ import { ResumeData, AnalysisData } from './utils/types';
 interface ResumeEditorProps {
   resumeId: string;
   onComplete?: () => void;
+}
+
+// 高亮显示选中条目的样式
+const HighlightedItem = styled(Paper)(({ theme }) => ({
+  '&.highlight-item': {
+    animation: 'highlight-pulse 2s ease-in-out',
+    boxShadow: `0 0 0 2px ${theme.palette.primary.main}`,
+  },
+  '@keyframes highlight-pulse': {
+    '0%': {
+      boxShadow: `0 0 0 0px ${theme.palette.primary.main}`,
+      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    },
+    '50%': {
+      boxShadow: `0 0 0 4px ${theme.palette.primary.main}`,
+      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+    },
+    '100%': {
+      boxShadow: `0 0 0 0px ${theme.palette.primary.main}`,
+      backgroundColor: 'transparent',
+    },
+  }
+}));
+
+// 悬浮按钮样式
+const JobTargetFab = styled(Fab)(({ theme }) => ({
+  position: 'fixed',
+  bottom: theme.spacing(2),
+  right: theme.spacing(2),
+  zIndex: 1000,
+}));
+
+// Add a DialogState interface close to other interfaces
+interface DialogState {
+  open: boolean;
+  title: string;
+  content: React.ReactNode;
+  actions: React.ReactNode;
 }
 
 const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => {
@@ -79,6 +133,9 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  
+  // 创建对编辑区域的引用
+  const sectionRefs = React.useRef<{[key: string]: HTMLDivElement | null}>({});
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -86,6 +143,21 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // 添加职位目标弹窗状态
+  const [jobTargetDialogOpen, setJobTargetDialogOpen] = useState(false);
+
+  // Add this to state declarations in the ResumeEditor component
+  const [newSkillCategory, setNewSkillCategory] = useState('');
+  const [newSkillType, setNewSkillType] = useState('array');
+
+  // Add this to state declarations in the ResumeEditor component
+  const [dialogState, setDialogState] = useState<DialogState>({ 
+    open: false, 
+    title: '', 
+    content: null, 
+    actions: null 
+  });
 
   // Fetch resume data when component mounts
   useEffect(() => {
@@ -107,10 +179,14 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
             if (parseResponse.data.status === 'success') {
               const content = parseResponse.data.data.content;
               setResumeData(content);
-              // Initialize section order based on content
-              setSectionOrder(Object.keys(content).filter(key => 
-                content[key] && key !== 'raw_text' && typeof content[key] === 'object'
-              ));
+              // Initialize section order based on content or saved section_order
+              if (content.section_order && Array.isArray(content.section_order)) {
+                setSectionOrder(content.section_order);
+              } else {
+                setSectionOrder(Object.keys(content).filter(key => 
+                  content[key] && key !== 'raw_text' && typeof content[key] === 'object'
+                ));
+              }
               setFileName(resume.filename || '');
               
               // After parsing, get or create analysis
@@ -121,10 +197,14 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           } else {
             const content = resume.content;
             setResumeData(content);
-            // Initialize section order based on content
-            setSectionOrder(Object.keys(content).filter(key => 
-              content[key] && key !== 'raw_text' && typeof content[key] === 'object'
-            ));
+            // Initialize section order based on content or saved section_order
+            if (content.section_order && Array.isArray(content.section_order)) {
+              setSectionOrder(content.section_order);
+            } else {
+              setSectionOrder(Object.keys(content).filter(key => 
+                content[key] && key !== 'raw_text' && typeof content[key] === 'object'
+              ));
+            }
             setFileName(resume.filename || '');
             
             // Get or create analysis
@@ -174,18 +254,49 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           setScore(70);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching/creating analysis:', error);
-      // Fallback to a default score in case of error
-      setScore(70);
+      
+      // 检查是否是404错误（分析不存在）
+      if (error.response && error.response.status === 404) {
+        console.log("Analysis not found, creating new analysis...");
+        try {
+          // 创建新的分析
+          const createAnalysisResponse = await resumeApi.analyzeResume(resumeId);
+          
+          if (createAnalysisResponse.data.status === 'success' && createAnalysisResponse.data.data) {
+            const analysis = createAnalysisResponse.data.data.analysis;
+            setAnalysisData(analysis);
+            setScore(analysis.overall_score || 0);
+            console.log("Successfully created analysis data:", analysis);
+          } else {
+            console.error('Failed to create analysis after 404', createAnalysisResponse);
+            setScore(70);
+          }
+        } catch (createError) {
+          console.error('Error creating analysis after 404:', createError);
+          setScore(70);
+        }
+      } else {
+        // 其他错误情况，使用默认分数
+        setScore(70);
+      }
     }
   };
 
   const handleEdit = (section: string) => {
     setEditMode({ ...editMode, [section]: true });
+    
+    // 确保正确复制数据，处理对象或数组类型
+    let sectionData = resumeData?.[section];
+    if (typeof sectionData === 'object' && sectionData !== null) {
+      // 使用深拷贝确保不会直接修改原始数据
+      sectionData = JSON.parse(JSON.stringify(sectionData));
+    }
+    
     setEditValues({ 
       ...editValues, 
-      [section]: JSON.parse(JSON.stringify(resumeData?.[section] || '')) 
+      [section]: sectionData || '' 
     });
   };
 
@@ -245,7 +356,24 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
         const oldIndex = items.indexOf(active.id.toString());
         const newIndex = items.indexOf(over.id.toString());
         
-        return arrayMove(items, oldIndex, newIndex);
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        
+        // After reordering, save to backend
+        try {
+          // Only save if we have resume data
+          if (resumeData) {
+            const sectionOrderData = {
+              ...resumeData,
+              section_order: newOrder
+            };
+            resumeApi.updateResumeContent(resumeId, sectionOrderData);
+            console.log('Section order updated successfully');
+          }
+        } catch (error) {
+          console.error('Error updating section order:', error);
+        }
+        
+        return newOrder;
       });
     }
   };
@@ -472,30 +600,74 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
     setSnackbarOpen(false);
   };
 
+  // 处理预览区域点击，滚动到对应的编辑区域并开始编辑
+  const handlePreviewSectionClick = (section: string, itemIndex?: number) => {
+    console.log(`点击了预览区的 ${section} 部分`, itemIndex !== undefined ? `索引: ${itemIndex}` : '');
+    
+    // 如果引用存在，则滚动到该位置
+    if (sectionRefs.current[section]) {
+      sectionRefs.current[section]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      
+      // 只对用户点击的特定部分启用编辑模式，不影响其他部分
+      setEditMode(prevMode => ({
+        ...prevMode,
+        [section]: true
+      }));
+      
+      // 准备编辑值
+      setEditValues(prevValues => ({
+        ...prevValues,
+        [section]: JSON.parse(JSON.stringify(resumeData?.[section] || ''))
+      }));
+      
+      // 如果点击了特定条目，在下一个渲染周期后将焦点放在该条目上
+      if (itemIndex !== undefined && Array.isArray(resumeData?.[section])) {
+        // 使用setTimeout确保DOM已更新
+        setTimeout(() => {
+          // 这里可以添加定位到特定条目的逻辑
+          // 例如，使用DOM查询找到该条目并滚动到它
+          try {
+            const itemElement = document.querySelector(`[data-section="${section}"][data-index="${itemIndex}"]`);
+            if (itemElement) {
+              (itemElement as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // 可选：视觉上高亮该条目
+              itemElement.classList.add('highlight-item');
+              setTimeout(() => itemElement.classList.remove('highlight-item'), 2000);
+            }
+          } catch (error) {
+            console.error('Error focusing on item:', error);
+          }
+        }, 300);
+      }
+    }
+  };
+
+  // 处理职位目标弹窗打开关闭
+  const handleJobTargetDialogOpen = () => {
+    setJobTargetDialogOpen(true);
+  };
+
+  const handleJobTargetDialogClose = () => {
+    setJobTargetDialogOpen(false);
+  };
+
   const renderSectionEditor = (section: string, title: string) => {
     if (!resumeData) return null;
 
     const sectionData = resumeData[section];
     const isEditing = editMode[section] || false;
 
+    // 处理字符串型字段，如summary或objective
     if (typeof sectionData === 'string') {
-      // Handle string fields like summary or objective
       return isEditing ? (
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', mb: 1 }}>
-            <TextField
-              fullWidth
-              multiline
-              rows={4}
-              value={editValues[section] || ''}
-              onChange={(e) => handleTextChange(section, e.target.value)}
-            />
-            <OptimizeButton 
-              onClick={() => handleOptimizeContent(section, editValues[section] || '')}
-              isOptimizing={!!isOptimizing[section]}
-              sx={{ ml: 1 }}
-            />
-          </Box>
+          <StringFieldEditor
+            value={editValues[section] || ''}
+            onChange={(newValue) => handleTextChange(section, newValue)}
+            onOptimize={() => handleOptimizeContent(section, editValues[section] || '')}
+            multiline={true}
+            rows={6}
+          />
           <Typography variant="caption" color="text.secondary">
             Tip: Click the magic wand to optimize this content with AI
           </Typography>
@@ -504,13 +676,19 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
         <Typography>{sectionData}</Typography>
       );
     }
-    
+    // 处理数组型字段，如experience或education
     else if (Array.isArray(sectionData)) {
-      // Handle array sections like experience or education
       return isEditing ? (
         <Box>
           {editValues[section]?.map((item: any, index: number) => (
-            <Paper key={index} elevation={1} sx={{ mb: 2, p: 2, position: 'relative' }}>
+            <HighlightedItem 
+              key={index} 
+              elevation={1} 
+              sx={{ mb: 2, p: 2, position: 'relative' }}
+              data-section={section}
+              data-index={index}
+              className={`section-item ${section}-item-${index}`}
+            >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                 <Typography variant="subtitle1">Item {index + 1}</Typography>
                 <IconButton 
@@ -853,7 +1031,7 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
                 
                 return null;
               })}
-            </Paper>
+            </HighlightedItem>
           ))}
           
           <Button 
@@ -891,7 +1069,190 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
         />
       );
     }
-
+    // 处理对象型字段，如skills
+    else if (typeof sectionData === 'object' && sectionData !== null) {
+      return isEditing ? (
+        <Box>
+          {/* 对象类型编辑界面 */}
+          {Object.entries(editValues[section] || {}).map(([key, value]) => {
+            // 处理字符串类型的值
+            if (typeof value === 'string') {
+              const optimizeId = `${section}-${key}`;
+              return (
+                <Box key={key} sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      size="small"
+                      value={value || ''}
+                      onChange={(e) => {
+                        setEditValues({
+                          ...editValues,
+                          [section]: {
+                            ...editValues[section],
+                            [key]: e.target.value
+                          }
+                        });
+                      }}
+                    />
+                    <OptimizeButton 
+                      onClick={() => handleOptimizeContent(section, value as string)}
+                      isOptimizing={!!isOptimizing[optimizeId]}
+                      sx={{ ml: 1 }}
+                    />
+                  </Box>
+                </Box>
+              );
+            }
+            // 处理数组类型的值
+            else if (Array.isArray(value)) {
+              return (
+                <Box key={key} sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
+                  </Typography>
+                  
+                  {(value as string[]).map((item, itemIndex) => {
+                    const optimizeId = `${section}-${key}-${itemIndex}`;
+                    return (
+                      <Box key={itemIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          size="small"
+                          value={item || ''}
+                          onChange={(e) => {
+                            const newArray = [...(editValues[section][key] as string[])];
+                            newArray[itemIndex] = e.target.value;
+                            setEditValues({
+                              ...editValues,
+                              [section]: {
+                                ...editValues[section],
+                                [key]: newArray
+                              }
+                            });
+                          }}
+                        />
+                        <IconButton 
+                          color="primary"
+                          onClick={() => handleOptimizeContent(section, item, undefined, itemIndex)}
+                          disabled={isOptimizing[optimizeId]}
+                          sx={{ ml: 1 }}
+                        >
+                          {isOptimizing[optimizeId] ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <AutoFixHighIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => {
+                            const newArray = [...(editValues[section][key] as string[])];
+                            newArray.splice(itemIndex, 1);
+                            setEditValues({
+                              ...editValues,
+                              [section]: {
+                                ...editValues[section],
+                                [key]: newArray
+                              }
+                            });
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    );
+                  })}
+                  
+                  <Button 
+                    size="small" 
+                    variant="outlined"
+                    onClick={() => {
+                      const currentArray = editValues[section][key] as string[] || [];
+                      setEditValues({
+                        ...editValues,
+                        [section]: {
+                          ...editValues[section],
+                          [key]: [...currentArray, '']
+                        }
+                      });
+                    }}
+                  >
+                    Add Item
+                  </Button>
+                </Box>
+              );
+            }
+            
+            return null;
+          })}
+          
+          {/* 添加新类别按钮 */}
+          <Box sx={{ mt: 2 }}>
+            <Button 
+              variant="outlined" 
+              startIcon={<AddIcon />}
+              onClick={() => {
+                // 弹出对话框让用户输入新的技能类别
+                const categoryName = prompt("Enter new skill category name:");
+                if (categoryName) {
+                  setEditValues({
+                    ...editValues,
+                    [section]: {
+                      ...editValues[section],
+                      [categoryName.toLowerCase().replace(/\s+/g, '_')]: ['']
+                    }
+                  });
+                }
+              }}
+            >
+              Add New Category
+            </Button>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={() => handleSave(section)}
+            >
+              Save
+            </Button>
+          </Box>
+        </Box>
+      ) : (
+        <Box>
+          {Object.entries(sectionData).map(([key, value]) => (
+            <Box key={key} sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold">
+                {key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}:
+              </Typography>
+              <Typography>
+                {Array.isArray(value) 
+                  ? (value as string[]).join(', ')
+                  : value as string}
+              </Typography>
+            </Box>
+          ))}
+          <Button 
+            variant="outlined" 
+            color="primary"
+            startIcon={<EditIcon />}
+            onClick={() => handleEdit(section)}
+            sx={{ mt: 1 }}
+          >
+            Edit
+          </Button>
+        </Box>
+      );
+    }
+    
     return null;
   };
 
@@ -1003,20 +1364,185 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           Job Target Optimization
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          Enter your target job title to get customized suggestions for AI optimization
+          Enter your target job position, and AI will optimize your resume content for this role
         </Typography>
         <TextField
           fullWidth
-          placeholder="e.g. Software Engineer"
+          placeholder="e.g. Software Engineer, Product Manager, Data Analyst"
           variant="outlined"
           value={targetJobTitle}
           onChange={(e) => setTargetJobTitle(e.target.value)}
           sx={{ mb: 2 }}
         />
         <Typography variant="caption" color="text.secondary" paragraph>
-          Adding a job title will help the AI tailor content to industry standards
+          Adding a target position will help AI customize content based on industry standards
         </Typography>
       </Paper>
+    );
+  };
+
+  const renderSkillsEditor = () => {
+    if (!resumeData?.skills) return null;
+
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>Skills</Typography>
+        
+        {/* Dynamically render editors for each skill category */}
+        {Object.entries(resumeData.skills).map(([key, value]) => {
+          const formattedKey = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+          
+          // Handle array values
+          if (Array.isArray(value)) {
+            return (
+              <Box key={key} sx={{ mb: 2 }}>
+                <Typography variant="subtitle1">{formattedKey}</Typography>
+                <ArrayFieldEditor
+                  value={value as string[]}
+                  onChange={(newValue: string[]) => {
+                    const updatedSkills = {
+                      ...resumeData.skills,
+                      [key]: newValue
+                    };
+                    setResumeData({
+                      ...resumeData,
+                      skills: updatedSkills
+                    });
+                  }}
+                  onOptimize={() => handleOptimizeContent('skills', key)}
+                />
+              </Box>
+            );
+          }
+          
+          // Handle string values
+          if (typeof value === 'string') {
+            return (
+              <Box key={key} sx={{ mb: 2 }}>
+                <Typography variant="subtitle1">{formattedKey}</Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={2}
+                  value={value}
+                  onChange={(e) => {
+                    const updatedSkills = {
+                      ...resumeData.skills,
+                      [key]: e.target.value
+                    };
+                    setResumeData({
+                      ...resumeData,
+                      skills: updatedSkills
+                    });
+                  }}
+                  variant="outlined"
+                  sx={{ mb: 1 }}
+                />
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<AutoFixHighIcon />}
+                  onClick={() => handleOptimizeContent('skills', key)}
+                >
+                  Optimize
+                </Button>
+              </Box>
+            );
+          }
+          
+          return null;
+        })}
+
+        {/* Add New Skill Category Button */}
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => {
+            // Show dialog to add new skill category
+            setDialogState({
+              open: true,
+              title: 'Add Skill Category',
+              content: (
+                <>
+                  <TextField
+                    autoFocus
+                    margin="dense"
+                    id="category"
+                    label="Category Name"
+                    fullWidth
+                    variant="outlined"
+                    value={newSkillCategory}
+                    onChange={(e) => setNewSkillCategory(e.target.value)}
+                  />
+                  <FormControl fullWidth sx={{ mt: 2 }}>
+                    <FormLabel id="skill-type">Type</FormLabel>
+                    <RadioGroup
+                      row
+                      aria-labelledby="skill-type"
+                      name="skill-type"
+                      value={newSkillType}
+                      onChange={(e) => setNewSkillType(e.target.value)}
+                    >
+                      <FormControlLabel value="array" control={<Radio />} label="List of Skills" />
+                      <FormControlLabel value="string" control={<Radio />} label="Text Description" />
+                    </RadioGroup>
+                  </FormControl>
+                </>
+              ),
+              actions: (
+                <>
+                  <Button onClick={() => setDialogState({ ...dialogState, open: false })}>Cancel</Button>
+                  <Button onClick={() => {
+                    // Format category name to snake_case
+                    const categoryKey = newSkillCategory.toLowerCase().replace(/\s+/g, '_');
+                    
+                    // Create new skills object with the new category
+                    const updatedSkills = {
+                      ...resumeData.skills,
+                      [categoryKey]: newSkillType === 'array' ? [] : ''
+                    };
+                    
+                    // Update resume data
+                    setResumeData({
+                      ...resumeData,
+                      skills: updatedSkills
+                    });
+                    
+                    // Reset state and close dialog
+                    setNewSkillCategory('');
+                    setNewSkillType('array');
+                    setDialogState({ ...dialogState, open: false });
+                  }}>
+                    Add
+                  </Button>
+                </>
+              )
+            });
+          }}
+        >
+          Add Skill Category
+        </Button>
+      </Box>
+    );
+  };
+
+  const renderCustomDialog = () => {
+    return (
+      <Dialog
+        open={dialogState.open}
+        onClose={() => setDialogState({ ...dialogState, open: false })}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{dialogState.title}</DialogTitle>
+        <DialogContent>
+          {dialogState.content}
+        </DialogContent>
+        <DialogActions>
+          {dialogState.actions}
+        </DialogActions>
+      </Dialog>
     );
   };
 
@@ -1055,93 +1581,121 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
   }
 
   return (
-    <Box sx={{ py: 2 }}>
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Box sx={{ 
+      py: 1, // 减少上下边距
+      px: 0, 
+      width: '100%', 
+      maxWidth: '100%', 
+      mx: 'auto',
+      height: 'calc(100vh - 20px)', // 使用接近全屏高度
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2 }}>
         <Typography variant="h5">
           Resume Content
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Tabs 
-            value={viewMode} 
-            onChange={(_, newValue) => setViewMode(newValue)}
-            aria-label="resume view mode"
-          >
-            <Tab 
-              icon={<EditNoteIcon />} 
-              label="Edit" 
-              value="edit" 
-              iconPosition="start" 
-            />
-            <Tab 
-              icon={<VisibilityIcon />} 
-              label="Preview" 
-              value="preview" 
-              iconPosition="start"
-            />
-          </Tabs>
           <Typography variant="body2" color="text.secondary">
             Resume File: {fileName}
           </Typography>
         </Box>
       </Box>
 
-      {viewMode === 'edit' ? (
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-          <Box sx={{ width: { xs: '100%', md: '66.666%' } }}>
-            <DndContext 
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext 
-                items={sectionOrder}
-                strategy={verticalListSortingStrategy}
-              >
-                {sectionOrder.map((section) => (
-                  resumeData && (
-                    <SortableSection
-                      key={section}
-                      id={section}
-                      section={section}
-                      resumeData={resumeData}
-                      editMode={editMode}
-                      handleEdit={handleEdit}
-                      handleSave={handleSave}
-                      renderSectionEditor={renderSectionEditor}
-                    />
-                  )
-                ))}
-              </SortableContext>
-            </DndContext>
-          </Box>
-          
-          <Box sx={{ width: { xs: '100%', md: '33.333%' } }}>
-            <ResumeScoreCard score={score} analysisData={analysisData} />
-            <JobTargetCard 
-              targetJobTitle={targetJobTitle} 
-              onChange={setTargetJobTitle} 
-            />
-          </Box>
-        </Stack>
-      ) : (
-        <Box sx={{ mt: 3, mb: 4 }}>
-          <ResumePreview resumeData={resumeData} />
-        </Box>
-      )}
-      
-      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center', gap: 2 }}>
-        {viewMode === 'preview' && (
-          <Button 
-            variant="outlined" 
-            startIcon={<FileDownloadIcon />}
-            onClick={() => {
-              // Implement PDF export functionality here
-              window.print();
-            }}
+      <Stack direction="row" spacing={0} sx={{ 
+        flex: 1, // 让Stack填充剩余空间
+        overflow: 'hidden' // 避免页面滚动条
+      }}>
+        {/* 左侧编辑区 */}
+        <Box sx={{ 
+          width: '50%', 
+          height: '100%', 
+          overflow: 'auto', 
+          borderRight: '1px solid #eee',
+          pr: 2,
+          pl: 2,
+          maxWidth: 'none'
+        }}>
+          <DndContext 
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            Export as PDF
-          </Button>
-        )}
+            <SortableContext 
+              items={sectionOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              {sectionOrder.map((section) => (
+                resumeData && (
+                  <SortableSection
+                    key={section}
+                    id={section}
+                    section={section}
+                    resumeData={resumeData}
+                    editMode={editMode}
+                    handleEdit={handleEdit}
+                    handleSave={handleSave}
+                    renderSectionEditor={renderSectionEditor}
+                    ref={(el: HTMLDivElement | null) => {
+                      sectionRefs.current[section] = el;
+                    }}
+                  />
+                )
+              ))}
+            </SortableContext>
+          </DndContext>
+        </Box>
+
+        {/* 右侧预览区 */}
+        <Box sx={{ 
+          width: '50%', 
+          height: '100%', 
+          overflow: 'auto',
+          bgcolor: '#f8f9fa',
+          borderRadius: 0,
+          p: 3,
+          boxShadow: 'inset 0 0 10px rgba(0,0,0,0.05)',
+          maxWidth: 'none'
+        }}>
+          <ResumePreview 
+            resumeData={resumeData} 
+            onSectionClick={handlePreviewSectionClick}
+            sectionOrder={sectionOrder}
+          />
+        </Box>
+      </Stack>
+      
+      <Box sx={{ py: 1, display: 'flex', justifyContent: 'center', gap: 2 }}>
+        <Button 
+          variant="outlined" 
+          startIcon={<FileDownloadIcon />}
+          onClick={() => {
+            // 使用自定义PDF生成API
+            setLoading(true);
+            resumeApi.generateCustomPDF(resumeId)
+              .then(response => {
+                // 创建blob并下载
+                const blob = new Blob([response.data], { type: 'application/pdf' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `resume_${resumeId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+              })
+              .catch(error => {
+                console.error('Error generating PDF:', error);
+                alert('Failed to generate PDF. Please try again.');
+              })
+              .finally(() => {
+                setLoading(false);
+              });
+          }}
+        >
+          Export as PDF
+        </Button>
         <Button 
           variant="contained" 
           color="primary" 
@@ -1151,6 +1705,53 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           Finalize and Save
         </Button>
       </Box>
+      
+      {/* 职位目标优化悬浮按钮 */}
+      <Tooltip title="Set target job position to optimize your resume">
+        <JobTargetFab 
+          color="primary" 
+          aria-label="set job target"
+          onClick={handleJobTargetDialogOpen}
+        >
+          <WorkIcon />
+        </JobTargetFab>
+      </Tooltip>
+
+      {/* 职位目标优化弹窗 */}
+      <Dialog 
+        open={jobTargetDialogOpen} 
+        onClose={handleJobTargetDialogClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Job Target Optimization</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Enter your target job position, and AI will optimize your resume content for this role
+          </Typography>
+          <TextField
+            fullWidth
+            label="Target Position"
+            placeholder="e.g. Software Engineer, Product Manager, Data Analyst"
+            variant="outlined"
+            value={targetJobTitle}
+            onChange={(e) => setTargetJobTitle(e.target.value)}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Adding a target position will help AI customize content based on industry standards
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleJobTargetDialogClose}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleJobTargetDialogClose}
+            color="primary"
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       {/* Add Snackbar notification */}
       <Snackbar 
@@ -1167,6 +1768,8 @@ const ResumeEditor: React.FC<ResumeEditorProps> = ({ resumeId, onComplete }) => 
           {snackbarMessage}
         </Alert>
       </Snackbar>
+
+      {renderCustomDialog()}
     </Box>
   );
 };

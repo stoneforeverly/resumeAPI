@@ -82,6 +82,13 @@ export const resumeApi = {
   deleteResume: async (resumeId: string) => {
     return api.delete(`/resumes/${resumeId}`);
   },
+
+  // Generate custom formatted PDF resume
+  generateCustomPDF: async (resumeId: string) => {
+    return api.get(`/resumes/${resumeId}/generate-pdf`, {
+      responseType: 'blob',
+    });
+  },
 };
 
 // Auth API functions

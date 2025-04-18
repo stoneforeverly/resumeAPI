@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { 
@@ -32,7 +32,7 @@ export interface SortableSectionProps {
   renderSectionEditor: (section: string, title: string) => React.ReactNode;
 }
 
-const SortableSection: React.FC<SortableSectionProps> = ({ 
+const SortableSection = forwardRef<HTMLDivElement, SortableSectionProps>(({ 
   id, 
   section, 
   resumeData, 
@@ -40,7 +40,7 @@ const SortableSection: React.FC<SortableSectionProps> = ({
   handleEdit, 
   handleSave, 
   renderSectionEditor 
-}) => {
+}, ref) => {
   const {
     attributes,
     listeners,
@@ -58,8 +58,19 @@ const SortableSection: React.FC<SortableSectionProps> = ({
     zIndex: isDragging ? 1 : 'auto'
   };
 
+  // 合并forwardRef的ref和useSortable的ref
+  const handleRef = (node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    // 转发ref到父组件
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+  };
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div ref={handleRef} style={style} {...attributes}>
       <Card>
         <CardHeader
           title={
@@ -85,6 +96,6 @@ const SortableSection: React.FC<SortableSectionProps> = ({
       </Card>
     </div>
   );
-};
+});
 
 export default SortableSection; 
