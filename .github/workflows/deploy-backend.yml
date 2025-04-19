@@ -38,7 +38,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Frontend
-        if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
+        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
           # 构建镜像并指定标签
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend  # 服务名需与 compose 文件一致
@@ -48,7 +48,7 @@ jobs:
           docker push $FRONTEND_IMAGE
 
       - name: Build and Push Backend
-        if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
+        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
           BACKEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}"
