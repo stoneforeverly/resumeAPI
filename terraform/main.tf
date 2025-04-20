@@ -59,23 +59,23 @@ resource "aws_instance" "app_instance" {
   vpc_security_group_ids = [aws_security_group.sg.id]
 
   user_data = <<-EOF
-              #!/bin/bash
-              # 安装 Docker 和认证助手
-              sudo yum update -y
-              sudo amazon-linux-extras install docker -y
-              sudo service docker start
-              sudo usermod -a -G docker ec2-user
-              sudo yum install -y amazon-ecr-credential-helper
-              mkdir -p /home/ec2-user/.docker
-              echo '{"credsStore": "ecr-login"}' > /home/ec2-user/.docker/config.json
+    #!/bin/bash
+    # 安装 Docker 和认证助手
+    sudo yum update -y
+    sudo amazon-linux-extras install docker -y
+    sudo service docker start
+    sudo usermod -a -G docker ec2-user
+    sudo yum install -y amazon-ecr-credential-helper
+    mkdir -p /home/ec2-user/.docker
+    echo '{"credsStore": "ecr-login"}' > /home/ec2-user/.docker/config.json
 
-              # 启动初始容器
-              docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest
-              docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest
+    # 启动初始容器
+    docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest
+    docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest
 
-              docker pull ${data.aws_ecr_repository.backend.repository_url}:latest
-              docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest
-              EOF
+    docker pull ${data.aws_ecr_repository.backend.repository_url}:latest
+    docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest
+  EOF
 
   tags = {
     Name = "AppInstance"
