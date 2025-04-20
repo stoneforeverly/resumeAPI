@@ -31,9 +31,3 @@ variable "existing_instance_id" {
   type        = string
   default     = "i-073b8f97f41d4d77d"  # 建议生产环境通过tfvars文件覆盖
 }
-
-variable "ssh_private_key_path" {
-  description = "SSH私钥文件路径"
-  type        = string
-  default     = "~/.ssh/id_rsa"  # 推荐使用变量注入而不是硬编码
-}
