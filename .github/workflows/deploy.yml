@@ -5,7 +5,6 @@ on:
 
 env:
   AWS_REGION: ap-southeast-2
-  TF_DIR: terraform    # Terraform 配置目录
 
 jobs:
   terraform-deploy:
@@ -32,30 +31,35 @@ jobs:
 
       # 3. Terraform 工作流
       - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform init
+        run: |
+          cd terraform 
+          terraform init
 
       - name: Terraform Format Check
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform fmt -check -diff
+        run: |
+          cd terraform 
+          terraform fmt -check -diff
 
       - name: Terraform Validate
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform validate
+        run: |
+          cd terraform 
+          terraform validate
 
       - name: Terraform Plan
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -input=false -out=tfplan
+        run: | 
+          cd terraform 
+          terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform apply -input=false -auto-approve tfplan
+        run: |
+          cd terraform
+          terraform apply -input=false -auto-approve tfplan
 
       # 4. 输出部署结果
       - name: Export Outputs
         id: get-outputs
-        working-directory: ${{ env.TF_DIR }}
         run: |
+          cd terraform
           echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
           echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
 
