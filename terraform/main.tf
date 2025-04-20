@@ -55,12 +55,5 @@ resource "null_resource" "deploy_app" {
       fi
       EOT
     ]
-
-    connection {
-      type        = "ssh"
-      user        = "ec2-user"
-      private_key = file("~/.ssh/id_rsa") # 替换为你的SSH私钥路径
-      host        = data.aws_instance.existing_instance.public_ip
-    }
   }
 }
