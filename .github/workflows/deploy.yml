@@ -32,7 +32,7 @@ jobs:
 
       # 3. Terraform 工作流
       - name: Terraform Init
-        working-directory: ./terraform  # 指定工作目录
+        working-directory: terraform  # 指定工作目录
         run: terraform init
 
       - name: Terraform Format Check
