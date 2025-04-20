@@ -117,21 +117,23 @@ resource "null_resource" "deploy_trigger" {
   }
 
   provisioner "local-exec" {
-    command = <<EOT
-      aws ssm send-command \
-        --instance-ids "${aws_instance.app_instance.id}" \
-        --document-name "AWS-RunShellScript" \
-        --parameters '{"commands":[
-          "docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest",
-          "docker stop frontend || true",
-          "docker rm frontend || true",
-          "docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest",
-          "docker pull ${data.aws_ecr_repository.backend.repository_url}:latest",
-          "docker stop backend || true",
-          "docker rm backend || true",
-          "docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest"
-        ]}' \
-        --region ${var.region}
-    EOT
-  }
+  command = <<EOT
+    echo "正在执行 SSM 命令更新容器..."
+    aws ssm send-command \
+      --instance-ids "${aws_instance.app_instance.id}" \
+      --document-name "AWS-RunShellScript" \
+      --parameters '{"commands":[
+        "docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest",
+        "docker stop frontend || true",
+        "docker rm frontend || true",
+        "docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest",
+        "docker pull ${data.aws_ecr_repository.backend.repository_url}:latest",
+        "docker stop backend || true",
+        "docker rm backend || true",
+        "docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest"
+      ]}' \
+      --region ${var.region}
+    echo "SSM 命令执行完成。"
+  EOT
+}
 }
