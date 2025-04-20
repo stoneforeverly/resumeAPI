@@ -1,34 +1,69 @@
-name: Terraform Deploy
+name: Deploy with Auto Image Tag
 
 on:
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: 'Docker image tag'
-        required: true
+      frontend_tag:
+        description: '前端镜像标签 (留空自动获取最新)'
+        required: false
+      backend_tag:
+        description: '后端镜像标签 (留空自动获取最新)'
+        required: false
+
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REGISTRY: 539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo
 
 jobs:
-  deploy:
+  get-latest-tags:
     runs-on: ubuntu-latest
+    outputs:
+      frontend_tag: ${{ steps.get-frontend-tag.outputs.tag }}
+      backend_tag: ${{ steps.get-backend-tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-      
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.5.7
-          
-      - name: Terraform Init
-        run: terraform init
-        
-      - name: Terraform Plan
-        run: terraform plan -var="image_version=${{ github.event.inputs.image_tag }}"
-        
+
+      - name: Get Frontend Tag
+        id: get-frontend-tag
+        run: |
+          if [ -z "${{ github.event.inputs.frontend_tag }}" ]; then
+            TAG=$(aws ecr describe-images --repository-name resume_backend-repo \
+              --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[?contains(@, `frontend`)][0]' \
+              --output text)
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.frontend_tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get Backend Tag
+        id: get-backend-tag
+        run: |
+          if [ -z "${{ github.event.inputs.backend_tag }}" ]; then
+            TAG=$(aws ecr describe-images --repository-name resume_backend-repo \
+              --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[?contains(@, `backend`)][0]' \
+              --output text)
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.event.inputs.backend_tag }}" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    needs: get-latest-tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var="image_version=${{ github.event.inputs.image_tag }}"
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_frontend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.frontend_tag }}
+          TF_VAR_backend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.backend_tag }}
