@@ -1,81 +1,70 @@
-name: Deploy with Auto Image Tag
+name: Terraform Deployment
 
 on:
   workflow_dispatch:
-    inputs:
-      frontend_tag:
-        description: '前端镜像标签 (留空自动获取最新)'
-        required: false
-      backend_tag:
-        description: '后端镜像标签 (留空自动获取最新)'
-        required: false
 
 env:
   AWS_REGION: ap-southeast-2
-  ECR_REGISTRY: 539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo
+  TF_DIR: terraform/    # Terraform 配置目录
 
 jobs:
-  get-latest-tags:
+  terraform-deploy:
     runs-on: ubuntu-latest
-    outputs:
-      frontend_tag: ${{ steps.get-frontend-tag.outputs.tag }}
-      backend_tag: ${{ steps.get-backend-tag.outputs.tag }}
+    environment: production
+    permissions:
+      contents: read
+      id-token: write  # 使用 OIDC 身份验证
+
     steps:
+      # 1. 检出代码
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. 配置 AWS 凭证 (推荐使用 OIDC)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get Frontend Tag
-        id: get-frontend-tag
-        run: |
-          if [ -z "${{ github.event.inputs.frontend_tag }}" ]; then
-            TAG=$(aws ecr describe-images --repository-name resume_backend-repo \
-              --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[?contains(@, `frontend`)][0]' \
-              --output text)
-            echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.inputs.frontend_tag }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get Backend Tag
-        id: get-backend-tag
-        run: |
-          if [ -z "${{ github.event.inputs.backend_tag }}" ]; then
-            TAG=$(aws ecr describe-images --repository-name resume_backend-repo \
-              --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[?contains(@, `backend`)][0]' \
-              --output text)
-            echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.inputs.backend_tag }}" >> $GITHUB_OUTPUT
-          fi
-
-  deploy:
-    needs: get-latest-tags
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: ${{ env.TF_DIR }}
-
+      # 3. 安装 Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform-version: 1.5.7
 
+      # 4. Terraform 工作流
       - name: Terraform Init
-        run: |
-          cd terraform
-          terraform init -input=false
-          terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform fmt -check -diff
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      # 5. 输出部署结果
+      - name: Export Outputs
+        id: get-outputs
+        working-directory: ${{ env.TF_DIR }}
         run: |
-          cd terraform
-          terraform apply -auto-approve
-        env:
-          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          TF_VAR_frontend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.frontend_tag }}
-          TF_VAR_backend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.backend_tag }}
+          echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
+          echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
+
+      # 6. 健康检查 (可选)
+      - name: Service Health Check
+        run: |
+          echo "Checking services on ${{ steps.get-outputs.outputs.public_ip }}"
+          curl --retry 3 --retry-delay 5 -sSf http://${{ steps.get-outputs.outputs.public_ip }}:3000/health
+          curl --retry 3 --retry-delay 5 -sSf http://${{ steps.get-outputs.outputs.public_ip }}:5000/health
