@@ -1,33 +1,41 @@
 variable "region" {
-  default = "ap-southeast-2"
+  description = "AWS区域"
+  type        = string
+  default     = "ap-southeast-2"
 }
 
 variable "aws_access_key" {
-  description = ""
+  description = "AWS访问密钥"
   type        = string
   sensitive   = true
 }
 
 variable "aws_secret_key" {
-  description = ""
+  description = "AWS密钥"
   type        = string
   sensitive   = true
 }
 
 variable "frontend_image" {
-  description = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:frontend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
+  description = "前端Docker镜像地址"
+  type        = string
+  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:frontend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
 }
 
 variable "backend_image" {
-  description = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
+  description = "后端Docker镜像地址"
+  type        = string
+  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
 }
 
 variable "existing_instance_id" {
-  description = "i-0cb146a6049815c9b"
+  description = "现有EC2实例ID"
   type        = string
+  default     = "i-073b8f97f41d4d77d"  # 建议生产环境通过tfvars文件覆盖
 }
 
-variable "ecr_registry" {
-  description = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo"
+variable "ssh_private_key_path" {
+  description = "SSH私钥文件路径"
   type        = string
+  default     = "~/.ssh/id_rsa"  # 推荐使用变量注入而不是硬编码
 }
