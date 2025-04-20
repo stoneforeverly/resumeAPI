@@ -79,3 +79,30 @@ jobs:
           else
             echo "No images to delete"
           fi
+
+       # ========== 新增Terraform部署步骤 ==========
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -input=false
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform plan \
+          -var="frontend_image=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:frontend-${{ env.IMAGE_TAG }}" \
+          -var="backend_image=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}" \
+          -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
