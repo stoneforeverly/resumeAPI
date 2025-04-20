@@ -17,13 +17,13 @@ variable "aws_access_key" {
 variable "frontend_image" {
   description = "前端Docker镜像地址"
   type        = string
-  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:frontend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
+  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:frontend-362eab83588e3e48df6b482988c8fb80fea7e559"
 }
 
 variable "backend_image" {
   description = "后端Docker镜像地址"
   type        = string
-  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
+  default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-362eab83588e3e48df6b482988c8fb80fea7e559"
 }
 
 variable "terraform_execution_role_arn" {
