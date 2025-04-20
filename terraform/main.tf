@@ -53,7 +53,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # EC2 实例配置
 resource "aws_instance" "app_instance" {
-  ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2
+  ami           = "ami-04b3f96fa99d40135" # Amazon Linux 2
   instance_type = "t2.micro"
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   vpc_security_group_ids = [aws_security_group.sg.id]
