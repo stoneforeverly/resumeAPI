@@ -1,4 +1,4 @@
-variable "region" {
+variable "aws-region" {
   description = "AWS区域"
   type        = string
   default     = "ap-southeast-2"
