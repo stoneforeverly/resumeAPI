@@ -40,4 +40,4 @@ ENV/
 .dockerignore
 
 # Logs
-*.log 
+*.log *.tfvars
