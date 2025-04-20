@@ -26,12 +26,6 @@ variable "backend_image" {
   default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-362eab83588e3e48df6b482988c8fb80fea7e559"
 }
 
-variable "terraform_execution_role_arn" {
-  description = "Terraform执行角色ARN"
-  type        = string
-  default     = "arn:aws:iam::539247470249:role/TerraformExecutionRole"
-}
-
 variable "existing_instance_id" {
   description = "现有EC2实例ID"
   type        = string
