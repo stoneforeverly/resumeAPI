@@ -2,18 +2,6 @@ variable "region" {
   default     = "ap-southeast-2"
 }
 
-variable "aws_access_key" {
-  description = "AWS访问密钥"
-  type        = string
-  sensitive   = true
-}
-
-variable "aws_secret_key" {
-  description = "AWS密钥"
-  type        = string
-  sensitive   = true
-}
-
 variable "frontend_image" {
   description = "前端Docker镜像地址"
   type        = string
@@ -24,6 +12,12 @@ variable "backend_image" {
   description = "后端Docker镜像地址"
   type        = string
   default     = "539247470249.dkr.ecr.ap-southeast-2.amazonaws.com/resume_backend-repo:backend-c420dbcae63def78ca9f22b07c54b1fdb9164d58"
+}
+
+variable "terraform_execution_role_arn" {
+  description = "Terraform执行角色ARN"
+  type        = string
+  default     = "arn:aws:iam::539247470249:role/TerraformExecutionRole"
 }
 
 variable "existing_instance_id" {
