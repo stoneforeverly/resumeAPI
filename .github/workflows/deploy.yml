@@ -15,9 +15,9 @@ jobs:
       contents: read
 
     steps:
-      # 1. 检出代码
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      # # 1. 检出代码
+      # - name: Checkout Repository
+      #   uses: actions/checkout@v4
 
       # 2. 配置 AWS 凭证 (推荐使用 OIDC)
       - name: Configure AWS Credentials
