@@ -1,8 +1,7 @@
 name: Deploy Resume Backend to ECR
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch:  # 仅保留手动触发
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -38,7 +37,6 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Frontend
-        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
           # 构建镜像并指定标签
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build frontend  # 服务名需与 compose 文件一致
@@ -48,7 +46,6 @@ jobs:
           docker push $FRONTEND_IMAGE
 
       - name: Build and Push Backend
-        # if: github.repository == 'QiushiZhou/resumeAPI'  # 主仓库才推送
         run: |
           docker compose -p myproject -f ${{ env.DOCKER_COMPOSE_FILE }} build backend
           BACKEND_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:backend-${{ env.IMAGE_TAG }}"
