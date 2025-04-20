@@ -13,7 +13,6 @@ jobs:
     environment: production
     permissions:
       contents: read
-      id-token: write  # 使用 OIDC 身份验证
 
     steps:
       # 1. 检出代码
@@ -27,7 +26,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
 
       # 3. 安装 Terraform
       - name: Setup Terraform
