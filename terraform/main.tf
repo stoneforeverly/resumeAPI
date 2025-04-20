@@ -3,14 +3,14 @@ provider "aws" {
   access_key = var.aws_access_key
   secret_key = var.aws_secret_key
   assume_role {
-    role_arn = "arn:aws:iam::539247470249:role/TerraformExecutionRole"
+    role_arn = var.terraform_execution_role_arn
   }
 }
 
 # 使用现有实例（通过ID指定）
 data "aws_instance" "existing_instance" {
   instance_id = "i-073b8f97f41d4d77d" # 替换为你的实例ID
-}
+}  
 
 # 仅当镜像变更时触发的部署资源
 resource "null_resource" "deploy_app" {
