@@ -116,7 +116,7 @@ resource "null_resource" "deploy_trigger" {
     backend_digest  = data.aws_ecr_image.backend.image_digest
   }
 
-  provisioner "local-exec" {
+   provisioner "local-exec" {
     command = <<EOT
       aws ssm send-command \
         --instance-ids "${aws_instance.app_instance.id}" \
