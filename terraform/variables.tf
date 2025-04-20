@@ -2,6 +2,18 @@ variable "region" {
   default     = "ap-southeast-2"
 }
 
+variable "aws_access_key" {
+   description = "AWS访问密钥"
+   type        = string
+   sensitive   = true
+ }
+ 
+ variable "aws_secret_key" {
+   description = "AWS密钥"
+   type        = string
+   sensitive   = true
+ }
+
 variable "frontend_image" {
   description = "前端Docker镜像地址"
   type        = string
