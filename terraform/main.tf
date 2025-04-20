@@ -1,5 +1,8 @@
 provider "aws" {
   region = var.region
+  assume_role {
+    role_arn = "arn:aws:iam::539247470249:role/TerraformExecutionRole"
+    }
 }
 
 # 获取 ECR 仓库信息
