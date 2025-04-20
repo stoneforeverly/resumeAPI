@@ -75,5 +75,7 @@ jobs:
           cd terraform
           terraform apply -auto-approve
         env:
+          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           TF_VAR_frontend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.frontend_tag }}
           TF_VAR_backend_image: ${{ env.ECR_REGISTRY }}:${{ needs.get-latest-tags.outputs.backend_tag }}
