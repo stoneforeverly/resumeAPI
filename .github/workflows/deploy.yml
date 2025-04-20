@@ -5,7 +5,7 @@ on:
 
 env:
   AWS_REGION: ap-southeast-2
-  TF_DIR: terraform/    # Terraform 配置目录
+  TF_DIR: terraform    # Terraform 配置目录
 
 jobs:
   terraform-deploy:
@@ -15,11 +15,8 @@ jobs:
       contents: read
 
     steps:
-      # # 1. 检出代码
-      # - name: Checkout Repository
-      #   uses: actions/checkout@v4
 
-      # 2. 配置 AWS 凭证 (推荐使用 OIDC)
+      # 1. 配置 AWS 凭证 (推荐使用 OIDC)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -27,13 +24,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3. 安装 Terraform
+      # 2. 安装 Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform-version: 1.5.7
 
-      # 4. Terraform 工作流
+      # 3. Terraform 工作流
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}
         run: terraform init
@@ -54,7 +51,7 @@ jobs:
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -input=false -auto-approve tfplan
 
-      # 5. 输出部署结果
+      # 4. 输出部署结果
       - name: Export Outputs
         id: get-outputs
         working-directory: ${{ env.TF_DIR }}
@@ -62,7 +59,7 @@ jobs:
           echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
           echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
 
-      # 6. 健康检查 (可选)
+      # 5. 健康检查 (可选)
       - name: Service Health Check
         run: |
           echo "Checking services on ${{ steps.get-outputs.outputs.public_ip }}"
