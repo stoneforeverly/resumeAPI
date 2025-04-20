@@ -1,56 +1,137 @@
 provider "aws" {
   region = var.region
-  assume_role {
-    role_arn = "arn:aws:iam::539247470249:role/TerraformExecutionRole"
+}
+
+# 获取 ECR 仓库信息
+data "aws_ecr_repository" "frontend" {
+  name = var.frontend_repo_name
+}
+
+data "aws_ecr_repository" "backend" {
+  name = var.backend_repo_name
+}
+
+# 获取最新镜像的 Digest
+data "aws_ecr_image" "frontend" {
+  repository_name = var.frontend_repo_name
+  image_tag       = "latest"
+}
+
+data "aws_ecr_image" "backend" {
+  repository_name = var.backend_repo_name
+  image_tag       = "latest"
+}
+
+# IAM 角色和权限
+resource "aws_iam_role" "ec2_role" {
+  name = "ec2-ecr-ssm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_read" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_core" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2-ecr-ssm-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# EC2 实例配置
+resource "aws_instance" "app_instance" {
+  ami           = "ami-0c55b159cbfafe1f0" # Amazon Linux 2
+  instance_type = "t2.micro"
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.sg.id]
+
+  user_data = <<-EOF
+              #!/bin/bash
+              # 安装 Docker 和认证助手
+              sudo yum update -y
+              sudo amazon-linux-extras install docker -y
+              sudo service docker start
+              sudo usermod -a -G docker ec2-user
+              sudo yum install -y amazon-ecr-credential-helper
+              mkdir -p /home/ec2-user/.docker
+              echo '{"credsStore": "ecr-login"}' > /home/ec2-user/.docker/config.json
+
+              # 启动初始容器
+              docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest
+              docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest
+
+              docker pull ${data.aws_ecr_repository.backend.repository_url}:latest
+              docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest
+              EOF
+
+  tags = {
+    Name = "AppInstance"
   }
 }
 
-data "aws_instance" "existing_instance" {
-  instance_id = "i-073b8f97f41d4d77d" # 建议改为变量引用
+# 安全组配置
+resource "aws_security_group" "sg" {
+  name        = "allow_app_ports"
+  description = "Allow application ports"
+
+  ingress {
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 5000
+    to_port     = 5000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-# 获取ECR认证令牌
-data "aws_ecr_authorization_token" "token" {}
-
-# 部署资源优化
-resource "null_resource" "deploy_app" {
+# 通过 SSM 触发容器更新
+resource "null_resource" "deploy_trigger" {
   triggers = {
-    frontend_sha    = sha256("${var.frontend_image}:${timestamp()}") # 添加时间戳强制刷新
-    backend_sha     = sha256("${var.backend_image}:${timestamp()}")
-    instance_status = data.aws_instance.existing_instance.instance_state
+    frontend_digest = data.aws_ecr_image.frontend.image_digest
+    backend_digest  = data.aws_ecr_image.backend.image_digest
   }
 
-  # 使用SSM Session Manager替代SSH
   provisioner "local-exec" {
-    command = <<-EOT
+    command = <<EOT
       aws ssm send-command \
-        --instance-ids ${data.aws_instance.existing_instance.id} \
+        --instance-ids "${aws_instance.app_instance.id}" \
         --document-name "AWS-RunShellScript" \
         --parameters '{"commands":[
-          "echo '开始部署容器服务'",
-          "echo '登录ECR仓库...'",
-          "aws ecr get-login-password --region ${var.region} | docker login --username AWS --password-stdin ${split("/", var.frontend_image)[0]}",
-          
-          "echo '处理前端容器...'",
-          "docker pull ${var.frontend_image} || true",
-          "docker stop frontend || true && docker rm frontend || true",
-          "docker run -d -p 80:3000 --name frontend --restart unless-stopped ${var.frontend_image}",
-
-          "echo '处理后端容器...'",
-          "docker pull ${var.backend_image} || true",
-          "docker stop backend || true && docker rm backend || true",
-          "docker run -d -p 8080:8080 --name backend --restart unless-stopped ${var.backend_image}",
-
-          "echo '验证部署结果...'",
-          "curl --retry 3 --retry-delay 5 -Is http://localhost:80 || exit 1"
+          "docker pull ${data.aws_ecr_repository.frontend.repository_url}:latest",
+          "docker stop frontend || true",
+          "docker rm frontend || true",
+          "docker run -d --name frontend -p 3000:3000 ${data.aws_ecr_repository.frontend.repository_url}:latest",
+          "docker pull ${data.aws_ecr_repository.backend.repository_url}:latest",
+          "docker stop backend || true",
+          "docker rm backend || true",
+          "docker run -d --name backend -p 5000:5000 ${data.aws_ecr_repository.backend.repository_url}:latest"
         ]}' \
-        --region ${var.region} \
-        --output text
+        --region ${var.region}
     EOT
-
-    environment = {
-      AWS_ACCESS_KEY_ID     = var.aws_access_key
-      AWS_SECRET_ACCESS_KEY = var.aws_secret_key
-    }
   }
 }
