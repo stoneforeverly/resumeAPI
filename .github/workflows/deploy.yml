@@ -26,9 +26,9 @@ jobs:
 
       # 2. 安装 Terraform
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v2
         with:
-          terraform-version: 1.5.7
+          terraform_version: 1.0.0
 
       # 3. Terraform 工作流
       - name: Terraform Init
