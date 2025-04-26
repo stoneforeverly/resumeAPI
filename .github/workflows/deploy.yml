@@ -1,71 +1,51 @@
-name: Terraform Deployment
+name: Deploy resumeAPI
 
 on:
-  workflow_dispatch:
-
-env:
-  AWS_REGION: ap-southeast-2
-  TF_DIR: terraform
+  workflow_dispatch: # 手动触发设置
 
 jobs:
-  terraform-deploy:
+  terraform:
+    name: Apply Terraform configuration
     runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
+
+    env:  # Define environment variables for AWS
+      AWS_REGION: ${{ secrets.AWS_REGION }} 
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}  
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }} 
+
+
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        
-      # 1. 配置 AWS 凭证 (推荐使用 OIDC)
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
 
-      # 2. 安装 Terraform
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.0.0
 
-      # 3. Terraform 工作流
-      - name: Terraform Init
-        working-directory: ${{ env.TF_DIR }}  # 指定工作目录
-        run: |
-          ls
-          terraform init
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}  # Use secret for AWS access key
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}  # Use secret for AWS secret key
+          aws-region: ${{ env.AWS_REGION }}  # Use environment variable for AWS region
 
-      - name: Terraform Format Check
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform fmt -check -diff
-
-      - name: Terraform Validate
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform validate
+      - name: Initialize Terraform
+        run: terraform init
+        working-directory: ./terraform/
 
       - name: Terraform Plan
-        working-directory: ${{ env.TF_DIR }}
-        run: terraform plan -input=false -out=tfplan
+        working-directory: ./terraform/
+        run: terraform plan
 
       - name: Terraform Apply
-        working-directory: ${{ env.TF_DIR }} 
-        run: terraform apply -input=false -auto-approve tfplan
+        working-directory: ./terraform/ 
+        run: terraform apply
 
-      # 4. 输出部署结果
       - name: Export Outputs
         id: get-outputs
         working-directory: ${{ env.TF_DIR }}
         run: |
           echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
           echo "public_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
-
-      # 5. 健康检查 (可选)
-      - name: Service Health Check
-        run: |
-          echo "Checking services on ${{ steps.get-outputs.outputs.public_ip }}"
-          curl --retry 3 --retry-delay 5 -sSf http://${{ steps.get-outputs.outputs.public_ip }}:3000/health
-          curl --retry 3 --retry-delay 5 -sSf http://${{ steps.get-outputs.outputs.public_ip }}:5000/health
