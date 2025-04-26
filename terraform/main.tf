@@ -14,13 +14,13 @@ data "aws_ecr_repository" "backend" {
 # 获取最新镜像的 Digest
 data "aws_ecr_image" "frontend" {
   repository_name = var.frontend_repo_name
-  image_tag       = "latest"
+  image_tag       = "frontend-latest"
 }
 
 data "aws_ecr_image" "backend" {
   repository_name = var.backend_repo_name
-  image_tag       = "latest"
-}
+  image_tag       = "backend-latest"
+
 
 # IAM 角色和权限
 resource "aws_iam_role" "ec2_role" {
