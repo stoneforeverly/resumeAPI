@@ -2,6 +2,17 @@ name: Deploy Resume Backend to ECR
 
 on:
   workflow_dispatch:
+   # 新增以下配置，允许被其他工作流调用
+  workflow_call:
+    inputs:
+      VITE_SERVER_HOST:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
