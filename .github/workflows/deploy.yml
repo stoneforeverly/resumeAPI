@@ -15,7 +15,9 @@ jobs:
       contents: read
 
     steps:
-
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
       # 1. 配置 AWS 凭证 (推荐使用 OIDC)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
