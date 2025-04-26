@@ -20,7 +20,7 @@ data "aws_ecr_image" "frontend" {
 data "aws_ecr_image" "backend" {
   repository_name = var.backend_repo_name
   image_tag       = "backend-latest"
-
+}
 
 # IAM 角色和权限
 resource "aws_iam_role" "ec2_role" {
