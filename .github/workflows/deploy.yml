@@ -34,7 +34,7 @@ jobs:
 
       - name: Terraform Apply
         working-directory: ./terraform/ 
-        run: terraform apply
+        run: terraform apply -auto-approve
 
       - name: Export Outputs
         id: get-outputs
